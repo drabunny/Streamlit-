@@ -163,9 +163,8 @@ def plot_shap_waterfall(input_dict):
     shap_values = explainer.shap_values(input_df)
 
     plt.clf()
-
     fig = plt.figure(figsize=(14, 8), dpi=150, facecolor="#ffffff")
-
+    
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
@@ -173,42 +172,14 @@ def plot_shap_waterfall(input_dict):
             data=input_df.iloc[0].values,
             feature_names=FEATURE_COLS
         ),
-        show=False
+        show=False,
+        show_titles=False  # 这一行是关键！彻底关闭自带顶部文字，无重影！
     )
 
-    # 获取坐标轴
     ax = plt.gca()
     ax.set_facecolor("#ffffff")
-
-    from matplotlib.patches import Rectangle
     
-    # 获取当前坐标轴的范围
-    x_min, x_max = ax.get_xlim()
-    y_min, y_max = ax.get_ylim()
-
-    cover_height = (y_max - y_min) * 0.18
-    cover_rect = Rectangle(
-        (x_min, y_max - cover_height),  # 左下角坐标
-        x_max - x_min,                  # 宽度
-        cover_height,                    # 高度
-        facecolor="#ffffff",             # 白色
-        edgecolor="none",
-        zorder=100
-    )
-    ax.add_patch(cover_rect)
-
-    plt.text(
-        (x_min + x_max) / 2, 
-        y_max - cover_height / 2, 
-        "房价影响因素贡献分解图",
-        fontsize=13,
-        color="#1f2937",
-        weight='bold',
-        ha='center',
-        va='center',
-        zorder=101
-    )
-
+    plt.title("房价影响因素贡献分解图", fontsize=13, pad=20, color="#1f2937", weight='bold')
     plt.xticks(fontsize=10)
     plt.yticks(fontsize=9)
     plt.subplots_adjust(left=0.35)
