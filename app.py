@@ -186,7 +186,7 @@ def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict
         price_level = "中等"
     else:
         price_level = "较低"
-    advice_parts.append(f"### 📊 总体评价\n该房源预测单价为 <strong>{pred_price:.0f}元/平米</strong>，属于 <strong>{price_level}</strong> 水平。")
+    advice_parts.append(f"**📊 总体评价**\n该房源预测单价为 **{pred_price:.0f}元/平米**，属于 **{price_level}** 水平。")
     
     # ---------- 2. 正向溢价因素 ----------
     if top_positive:
