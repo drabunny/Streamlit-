@@ -22,7 +22,6 @@ st.markdown("""
     .stApp {
         background-color: #f5f7fa;
     }
-
     .main > div {
         background-color: #ffffff;
         border-radius: 20px;
@@ -30,7 +29,6 @@ st.markdown("""
         margin: 1rem;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
     }
-
     .stButton > button {
         background: linear-gradient(135deg, #1677ff 0%, #4096ff 100%);
         color: white;
@@ -47,7 +45,6 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(22, 119, 255, 0.25);
         transform: translateY(-2px);
     }
-
     .result-card {
         background-color: #ffffff;
         border-radius: 16px;
@@ -68,7 +65,6 @@ st.markdown("""
         color: #4e5969;
         font-weight: 500;
     }
-
     .section-title {
         font-size: 1.25rem;
         font-weight: 700;
@@ -77,24 +73,12 @@ st.markdown("""
         padding-bottom: 0.5rem;
         border-bottom: 2px solid #f0f0f0;
     }
-
     .stExpander {
         border-radius: 12px !important;
         border: 1px solid #f0f0f0;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
         margin-bottom: 1rem;
         overflow: hidden;
-    }
-    .stExpander > div > div:first-child {
-        background-color: #ffffff !important;
-        border-radius: 12px;
-    }
-    .stExpander > div > div:last-child {
-        background-color: #ffffff !important;
-    }
-
-    .stNumberInput, .stSelectbox {
-        margin-bottom: 0.8rem;
     }
     .info-card {
         background-color: #f7f8fa;
@@ -103,7 +87,6 @@ st.markdown("""
         border-left: 4px solid #1677ff;
         margin-top: 1rem;
     }
-
     hr {
         border-color: #f0f0f0;
         margin: 1.5rem 0;
@@ -133,11 +116,20 @@ plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'SimHei', 'Microsoft Y
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.family'] = 'sans-serif'
 
-# ================== 城市宏观数据预设 ==================
-CITY_MACRO = {
-    "济南市": {"income": 62506, "gdp": 135200, "population": 943.7, "tertiary": 62.8},
-    "烟台市": {"income": 59126, "gdp": 144241, "population": 703.22, "tertiary": 51.0},
-    "济宁市": {"income": 45055, "gdp": 66741, "population": 824.05, "tertiary": 51.03}
+# ================== 宏观数据字典（城市+年份）==================
+MACRO_DATA = {
+    ("济南市", 2021): {"income": 57449, "gdp": 122400, "population": 933.6, "tertiary": 61.7},
+    ("济南市", 2022): {"income": 59459, "gdp": 127800, "population": 941.5, "tertiary": 61.7},
+    ("济南市", 2023): {"income": 62506, "gdp": 135200, "population": 943.7, "tertiary": 62.8},
+    ("济南市", 2024): {"income": 65364, "gdp": 142200, "population": 951.5, "tertiary": 63.3},
+    ("烟台市", 2021): {"income": 53169, "gdp": 122818, "population": 708.28, "tertiary": 51.5},
+    ("烟台市", 2022): {"income": 55700, "gdp": 134581, "population": 705.87, "tertiary": 50.8},
+    ("烟台市", 2023): {"income": 59126, "gdp": 144241, "population": 703.22, "tertiary": 51.0},
+    ("烟台市", 2024): {"income": 62060, "gdp": 153300, "population": 703.52, "tertiary": 51.1},
+    ("济宁市", 2021): {"income": 41256, "gdp": 60728, "population": 833.7, "tertiary": 48.4},
+    ("济宁市", 2022): {"income": 42989, "gdp": 64100, "population": 829.06, "tertiary": 49.6},
+    ("济宁市", 2023): {"income": 45055, "gdp": 66741, "population": 824.05, "tertiary": 51.03},
+    ("济宁市", 2024): {"income": 47812, "gdp": 71600, "population": 818.73, "tertiary": 52.07},
 }
 
 # ================== 辅助函数 ==================
@@ -154,51 +146,41 @@ def predict_price(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     return model.predict(input_df)[0]
 
-# ================== 自定义瀑布图（只显示一个房价，无重叠）==================
-def plot_shap_waterfall(input_dict):
+def plot_shap_waterfall_clean(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
     expected_value = explainer.expected_value
+    # 计算最终预测值
     final_pred = predict_price(input_dict)
 
-    values = shap_values[0]
-    feature_names = FEATURE_COLS
-    order = np.argsort(np.abs(values))[::-1]
-    values_sorted = values[order]
-    feature_names_sorted = [feature_names[i] for i in order if abs(values[i]) > 1e-6]
-    values_sorted = values_sorted[:len(feature_names_sorted)]
-
-    cumulative = np.cumsum(values_sorted)
-    start = expected_value
-    positions = np.concatenate(([start], start + cumulative[:-1]))
-    ends = start + cumulative
-
-    fig, ax = plt.subplots(figsize=(12, max(6, len(feature_names_sorted) * 0.4)), facecolor='white')
-    ax.set_facecolor('white')
-
-    y_pos = np.arange(len(feature_names_sorted))
-    colors = ['#ff7c80' if v > 0 else '#588c7e' for v in values_sorted]
-
-    for i, (v, start_x, end_x) in enumerate(zip(values_sorted, positions, ends)):
-        ax.hlines(y=i, xmin=start_x, xmax=end_x, color=colors[i], linewidth=6, alpha=0.8)
-        ax.text(end_x, i, f'{v:+.0f}', va='center', ha='left' if v > 0 else 'right', fontsize=9, color='#333')
-        if i == 0:
-            ax.vlines(x=start_x, ymin=i-0.4, ymax=i+0.4, linestyle='--', color='gray', linewidth=1)
-
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(feature_names_sorted, fontsize=10)
-    ax.set_ylim(-0.5, len(feature_names_sorted) - 0.5)
-    ax.set_xlabel('房价贡献 (元/平米)', fontsize=11)
-    ax.set_title(f'房价影响因素瀑布图\n最终预测值: {final_pred:.0f} 元/平米', fontsize=12, pad=15)
-    ax.grid(axis='x', alpha=0.3, linestyle='--')
-    ax.axvline(x=expected_value, color='gray', linestyle='-', linewidth=1, alpha=0.5)
-    ax.text(expected_value, -0.7, f'基准值: {expected_value:.0f}', ha='center', fontsize=8, color='gray')
-
+    # 创建图形
+    fig, ax = plt.subplots(figsize=(14, 8), facecolor='white')
+    # 绘制瀑布图
+    shap.waterfall_plot(
+        shap.Explanation(
+            values=shap_values[0],
+            base_values=expected_value,
+            data=input_df.iloc[0].values,
+            feature_names=FEATURE_COLS
+        ),
+        show=False,
+        max_display=15,
+        ax=ax
+    )
+    # 隐藏多余的标题和数值
+    for text in ax.texts:
+        if 'model output value' in text.get_text().lower() or 'base value' in text.get_text().lower():
+            text.set_visible(False)
+    # 在合适位置添加统一的预测值标签
+    ax.set_title(f'房价影响因素瀑布图\n最终预测值: {final_pred:.0f} 元/平米', fontsize=14, pad=20)
+    ax.annotate(f'预测值 = {final_pred:.0f}', xy=(0.95, 0.05), xycoords='axes fraction',
+                fontsize=12, ha='right', color='#1677ff', weight='bold',
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="#1677ff"))
     plt.tight_layout()
     return fig
 
-# ================== 初始化 session_state 默认值 ==================
+# ================== 初始化 session_state ==================
 if 'init_done' not in st.session_state:
     st.session_state.area = 100.0
     st.session_state.age = 5
@@ -225,13 +207,15 @@ if 'init_done' not in st.session_state:
     st.session_state.count_catering = 30
     st.session_state.dist_park = 1000
     st.session_state.count_park = 2
-    # 宏观数据初始值（济南市）
-    default_macro = CITY_MACRO['济南市']
-    st.session_state.income = default_macro['income']
-    st.session_state.gdp = default_macro['gdp']
-    st.session_state.population = default_macro['population']
-    st.session_state.tertiary = default_macro['tertiary']
-    st.session_state.macro_auto_fill = True   # 控制自动填充
+    # 默认城市和年份
+    st.session_state.city = "济南市"
+    st.session_state.year = 2023
+    # 初始宏观数据
+    default_macro = MACRO_DATA.get((st.session_state.city, st.session_state.year), MACRO_DATA[("济南市", 2023)])
+    st.session_state.income = default_macro["income"]
+    st.session_state.gdp = default_macro["gdp"]
+    st.session_state.population = default_macro["population"]
+    st.session_state.tertiary = default_macro["tertiary"]
     st.session_state.init_done = True
 
 # ================== 页面主标题 ==================
@@ -240,26 +224,27 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ================== 宏观经济指标（增加城市选择）==================
+# ================== 宏观经济指标（带城市年份选择）==================
 st.markdown("<div class='section-title'>📊 城市宏观经济指标</div>", unsafe_allow_html=True)
 
-selected_city = st.selectbox(
-    "选择预置城市（将自动填充下方宏观数据）",
-    ["济南市", "烟台市", "济宁市", "自定义"],
-    index=0
-)
+# 城市和年份选择
+col_city, col_year, _ = st.columns([1, 1, 2])
+with col_city:
+    selected_city = st.selectbox("选择城市", ["济南市", "烟台市", "济宁市"], key="city_select")
+with col_year:
+    selected_year = st.selectbox("选择年份", [2021, 2022, 2023, 2024], key="year_select")
 
-if selected_city != "自定义" and selected_city in CITY_MACRO:
-    if st.session_state.get('macro_auto_fill', True):
-        default_macro = CITY_MACRO[selected_city]
-        st.session_state.income = default_macro['income']
-        st.session_state.gdp = default_macro['gdp']
-        st.session_state.population = default_macro['population']
-        st.session_state.tertiary = default_macro['tertiary']
-        st.session_state.macro_auto_fill = False
-else:
-    st.session_state.macro_auto_fill = True
+# 根据选择更新宏观数据（如果发生变化）
+if selected_city != st.session_state.city or selected_year != st.session_state.year:
+    st.session_state.city = selected_city
+    st.session_state.year = selected_year
+    macro_vals = MACRO_DATA.get((selected_city, selected_year), MACRO_DATA[("济南市", 2023)])
+    st.session_state.income = macro_vals["income"]
+    st.session_state.gdp = macro_vals["gdp"]
+    st.session_state.population = macro_vals["population"]
+    st.session_state.tertiary = macro_vals["tertiary"]
 
+# 显示可编辑的宏观指标
 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
 with col_m1:
     st.number_input("城镇居民人均可支配收入 (元)", key="income", min_value=30000, max_value=100000, step=1000)
@@ -388,7 +373,7 @@ with col_right:
             }
             with st.spinner("模型计算中，请稍候..."):
                 pred = predict_price(input_dict)
-                fig = plot_shap_waterfall(input_dict)
+                fig = plot_shap_waterfall_clean(input_dict)
             st.session_state['pred'] = pred
             st.session_state['fig'] = fig
         except Exception as e:
@@ -424,9 +409,10 @@ with col_right:
         <div class="info-card">
             <h4 style='margin-top:0; color:#1677ff;'>💡 操作指南</h4>
             <p style='margin-bottom:0; line-height:1.7;'>
-            1. 填写房屋基础属性、周边配套、城市宏观数据<br>
-            2. 点击【开始预测房价】按钮一键计算<br>
-            3. 自动生成可视化因素分解图，直观查看涨跌原因
+            1. 选择城市和年份，自动填充宏观数据，也可手动修改<br>
+            2. 填写房屋基础属性、周边配套参数<br>
+            3. 点击【开始预测房价】按钮一键计算<br>
+            4. 自动生成因素分解图，直观查看涨跌原因
             </p>
         </div>
         """, unsafe_allow_html=True)
