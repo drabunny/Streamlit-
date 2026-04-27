@@ -164,8 +164,8 @@ def plot_shap_waterfall(input_dict):
 
     plt.clf()
 
-    fig = plt.figure(figsize=(14, 8), dpi=150, facecolor="#ffffff")
-
+    fig = plt.figure(figsize=(14, 9), dpi=150, facecolor="#ffffff")
+    
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
@@ -179,16 +179,15 @@ def plot_shap_waterfall(input_dict):
     ax = plt.gca()
     ax.set_facecolor("#ffffff")
 
-    plt.subplots_adjust(top=0.85, left=0.35)
+    plt.subplots_adjust(top=0.78, left=0.35)
 
     plt.suptitle(
         "房价影响因素贡献分解图",
         fontsize=13,
-        y=0.98,
+        y=0.99,
         color="#1f2937",
         weight='bold'
     )
-
     plt.xticks(fontsize=10)
     plt.yticks(fontsize=9)
 
