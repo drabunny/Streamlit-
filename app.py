@@ -157,6 +157,7 @@ def predict_price(input_dict):
     return model.predict(input_df)[0]
 
 # ================== SHAP瀑布图 ==================
+# ================== 【只解决顶部数值重影】根源修复版 ==================
 def plot_shap_waterfall(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     explainer = shap.TreeExplainer(model)
@@ -164,8 +165,10 @@ def plot_shap_waterfall(input_dict):
 
     plt.clf()
 
-    fig = plt.figure(figsize=(14, 9), dpi=150, facecolor="#ffffff")
+    # 完全保留你原来的画布设置，不改动
+    fig = plt.figure(figsize=(14, 8), dpi=150, facecolor="#ffffff")
     
+    # 完全保留原始调用，不添加任何额外参数
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
@@ -176,20 +179,43 @@ def plot_shap_waterfall(input_dict):
         show=False
     )
 
+    # 获取坐标轴
     ax = plt.gca()
     ax.set_facecolor("#ffffff")
 
-    plt.subplots_adjust(top=0.78, left=0.35)
+    # ============== 【唯一修改：强制分开顶部重影的两个数值】 ==============
+    # 找到图中所有文本，筛选出顶部重叠的两个数值
+    all_texts = ax.texts
+    top_number_texts = []
+    # 定位最顶端的两个数值文本（y坐标在画布最顶部的）
+    for text in all_texts:
+        x_pos, y_pos = text.get_position()
+        if y_pos > 0.95:  # 只抓最顶部的数值
+            top_number_texts.append(text)
+    
+    # 把两个数值上下错开，彻底解决重影
+    if len(top_number_texts) >= 2:
+        # 第一个数值往上移
+        x1, y1 = top_number_texts[0].get_position()
+        top_number_texts[0].set_position((x1, 1.03))
+        top_number_texts[0].set_fontsize(9)
+        # 第二个数值往下移
+        x2, y2 = top_number_texts[1].get_position()
+        top_number_texts[1].set_position((x2, 0.97))
+        top_number_texts[1].set_fontsize(9)
 
+    # 保留你原来的标题和字体设置
     plt.suptitle(
         "房价影响因素贡献分解图",
         fontsize=13,
-        y=0.99,
+        y=0.98,
         color="#1f2937",
         weight='bold'
     )
     plt.xticks(fontsize=10)
     plt.yticks(fontsize=9)
+    # 给左侧长标签留足空间，不截断
+    plt.subplots_adjust(left=0.35)
 
     return fig
 
