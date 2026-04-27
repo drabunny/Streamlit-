@@ -70,7 +70,6 @@ st.markdown("""
         font-weight: 500;
     }
 
-    /* 分区标题 柔和不突兀 */
     .section-title {
         font-size: 1.25rem;
         font-weight: 700;
@@ -165,9 +164,8 @@ def plot_shap_waterfall(input_dict):
 
     plt.clf()
 
-    fig, ax = plt.subplots(figsize=(14, 8), dpi=150, facecolor="#ffffff")
-    ax.set_facecolor("#ffffff")
-
+    fig = plt.figure(figsize=(14, 8), dpi=150, facecolor="#ffffff")
+    
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
@@ -176,26 +174,36 @@ def plot_shap_waterfall(input_dict):
             feature_names=FEATURE_COLS
         ),
         show=False,
-        max_display=15,  # 控制展示的特征数量，避免标签拥挤
-        colors={"positive": "#ff4d4f", "negative": "#20c997"},
-        precision=2  # 数值保留2位小数，避免长数字导致显示异常
+        max_display=15,
+        precision=2
     )
+
+    ax = plt.gca()
+    ax.set_facecolor("#ffffff")
+
+    for bar in ax.patches:
+        width = bar.get_width()
+        if width > 0:
+            bar.set_facecolor('#ff4d4f')  # 正向：红色
+        else:
+            bar.set_facecolor('#20c997')  # 负向：青绿色
+        bar.set_edgecolor('none')
+        bar.set_alpha(0.9)
 
     plt.subplots_adjust(top=0.86, left=0.32)
 
-    # 字体优化，清晰不模糊
     plt.xticks(fontsize=10, color="#222222")
     plt.yticks(fontsize=9, color="#333333")
 
     plt.suptitle(
         "房价影响因素贡献分解图\n红色：正向提升房价 ｜ 青绿色：负向拉低房价",
         fontsize=12,
-        y=0.98,  # 固定在画布最顶端，和下方数值完全分离
+        y=0.98,
         color="#1f2937",
         weight='bold'
     )
 
-    # 浅色网格辅助阅读，不晃眼
+    # 浅色网格
     ax.grid(axis='x', alpha=0.2, linestyle='--')
 
     return fig
