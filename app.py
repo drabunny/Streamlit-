@@ -174,10 +174,10 @@ def plot_shap_waterfall(input_dict):
             feature_names=FEATURE_COLS
         ),
         show=False,
-        max_display=15,
-        precision=2
+        max_display=15
     )
 
+    # 获取当前坐标轴
     ax = plt.gca()
     ax.set_facecolor("#ffffff")
 
