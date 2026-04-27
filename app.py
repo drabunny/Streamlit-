@@ -15,11 +15,14 @@ st.set_page_config(
 )
 
 font_path = "simhei.ttf"
-fm.fontManager.addfont(font_path)
-zh_font = fm.FontProperties(fname=font_path)
+if os.path.exists(font_path):
+    fm.fontManager.addfont(font_path)
+    # 将英文字体放在最前面，确保负号/数字使用英文 fallback
+    plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'simhei', 'Arial', 'sans-serif']
+    plt.rcParams['axes.unicode_minus'] = False   # 使用 ASCII 连字符
+else:
+    st.warning("未找到 simhei.ttf，中文可能无法显示")
 
-plt.rcParams['font.sans-serif'] = ['simhei', 'DejaVu Sans', 'Arial', 'sans-serif']
-plt.rcParams['axes.unicode_minus'] = False
 # ================== 加载模型与处理对象 ==================
 @st.cache_resource
 def load_artifacts():
