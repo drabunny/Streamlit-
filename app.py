@@ -76,6 +76,13 @@ st.markdown("""
         border-left: 4px solid #1677ff;
         margin-top: 1rem;
     }
+    .advice-card {
+        background-color: #f0f9ff;
+        padding: 1.25rem;
+        border-radius: 12px;
+        border-left: 4px solid #52c41a;
+        margin-top: 1rem;
+    }
     hr { border-color: #f0f0f0; margin: 1.5rem 0; }
 </style>
 """, unsafe_allow_html=True)
@@ -102,7 +109,7 @@ plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'SimHei', 'Microsoft Y
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.family'] = 'sans-serif'
 
-# ================== 宏观数据字典（城市+年份）==================
+# ================== 宏观数据字典 ==================
 MACRO_DATA = {
     ("济南市", 2021): {"income": 57449, "gdp": 122400, "population": 933.6, "tertiary": 61.7},
     ("济南市", 2022): {"income": 59459, "gdp": 127800, "population": 941.5, "tertiary": 61.7},
@@ -143,7 +150,6 @@ def plot_shap_waterfall_clean(input_dict):
     expected_value = explainer.expected_value
     final_pred = predict_price(input_dict)
 
-    # 创建图形
     fig = plt.figure(figsize=(12, 8), facecolor='white')
     shap.waterfall_plot(
         shap.Explanation(
@@ -156,20 +162,114 @@ def plot_shap_waterfall_clean(input_dict):
         max_display=15
     )
     ax = plt.gca()
-
-    texts_to_hide = []
+    # 隐藏自动生成的英文标签
     for text in ax.texts:
         txt = text.get_text()
         if any(key in txt.lower() for key in ['model output', 'base value', 'f(x)=', 'e[f(x)]=', 'output value']):
-            texts_to_hide.append(text)
-        if text.get_position()[1] > 0.9 and txt.replace('.', '').replace('-', '').isdigit():
-            texts_to_hide.append(text)
-    for text in texts_to_hide:
-        text.set_visible(False)
-
+            text.set_visible(False)
     ax.set_title(f'房价影响因素分解图\n最终预测值：{final_pred:.0f} 元/平米', fontsize=14, pad=20)
-
     return fig
+
+# ================== 基于SHAP的自动建议生成（无需API）==================
+def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict, city):
+    """
+    根据SHAP贡献值和用户输入，生成自然语言购房建议
+    """
+    advice_parts = []
+    
+    # ---- 1. 价格水平总体评价 ----
+    if pred_price > 20000:
+        price_level = "较高"
+    elif pred_price > 12000:
+        price_level = "中等偏上"
+    elif pred_price > 8000:
+        price_level = "中等"
+    else:
+        price_level = "较低"
+    advice_parts.append(f"该房源预测单价为{pred_price:.0f}元/平米，属于{price_level}水平。")
+    
+    # ---- 2. 正向因素解释（涨价的理由） ----
+    if top_positive:
+        pos_lines = []
+        for name, val in top_positive[:5]:
+            val_int = int(round(val))
+            # 根据特征名定制描述
+            if name == '建筑面积':
+                area = input_dict.get('建筑面积', 0)
+                pos_lines.append(f"• 房屋建筑面积{area:.0f}平米，使价格上升约{val_int}元/平米")
+            elif '房龄' in name and val > 0:
+                # 房龄通常为负，若为正则说明较新
+                age = input_dict.get('房龄', 0)
+                pos_lines.append(f"• 房龄仅{age:.0f}年，相对较新，使价格上升约{val_int}元/平米")
+            elif 'count_地铁站' in name:
+                count = input_dict.get('count_地铁站_within_10000m', 0)
+                pos_lines.append(f"• 周边10公里内有{count}个地铁站，交通便利，使价格上升约{val_int}元/平米")
+            elif 'count_学校' in name:
+                count = input_dict.get('count_学校_within_10000m', 0)
+                pos_lines.append(f"• 周边10公里内有{count}所学校，教育资源丰富，使价格上升约{val_int}元/平米")
+            elif 'count_综合医院' in name:
+                count = input_dict.get('count_综合医院_within_10000m', 0)
+                pos_lines.append(f"• 周边10公里内有{count}家综合医院，医疗配套良好，使价格上升约{val_int}元/平米")
+            elif 'count_餐饮' in name:
+                count = input_dict.get('count_餐饮_within_10000m', 0)
+                pos_lines.append(f"• 周边餐饮密度高（{count}家），生活便利，使价格上升约{val_int}元/平米")
+            elif '城镇居民人均可支配收入' in name:
+                income = input_dict.get('城镇居民人均可支配收入', 0)
+                pos_lines.append(f"• 城市居民收入水平较高（{income:.0f}元），购买力支撑，使价格上升约{val_int}元/平米")
+            elif '人均GDP' in name:
+                gdp = input_dict.get('人均GDP', 0)
+                pos_lines.append(f"• 城市经济发展较好（人均GDP {gdp:.0f}元），拉动房价上涨约{val_int}元/平米")
+            elif 'count_小型商业' in name:
+                count = input_dict.get('count_小型商业_within_10000m', 0)
+                pos_lines.append(f"• 周边商业氛围浓厚（{count}个小商铺），生活便利，使价格上升约{val_int}元/平米")
+            else:
+                pos_lines.append(f"• {name} 因素使价格上升约{val_int}元/平米")
+        if pos_lines:
+            advice_parts.append("【主要溢价因素】\n" + "\n".join(pos_lines))
+    
+    # ---- 3. 负向因素解释（折价的原因） ----
+    if top_negative:
+        neg_lines = []
+        for name, val in top_negative[:5]:
+            val_abs = int(round(-val))  # val为负数
+            if '房龄' in name:
+                age = input_dict.get('房龄', 0)
+                neg_lines.append(f"• 房龄已达{age:.0f}年，相对老旧，使价格下降约{val_abs}元/平米")
+            elif 'dist_地铁站' in name:
+                dist = input_dict.get('dist_地铁站', 0)
+                neg_lines.append(f"• 距最近地铁站{dist:.0f}米，略远，使价格下降约{val_abs}元/平米")
+            elif 'dist_学校' in name:
+                dist = input_dict.get('dist_学校', 0)
+                neg_lines.append(f"• 距学校{dist:.0f}米，步行稍远，使价格下降约{val_abs}元/平米")
+            elif 'dist_综合医院' in name:
+                dist = input_dict.get('dist_综合医院', 0)
+                neg_lines.append(f"• 距综合医院{dist:.0f}米，医疗配套距离较远，使价格下降约{val_abs}元/平米")
+            elif 'dist_公交站' in name:
+                dist = input_dict.get('dist_公交站', 0)
+                neg_lines.append(f"• 距公交站{dist:.0f}米，公共交通不够便捷，使价格下降约{val_abs}元/平米")
+            else:
+                neg_lines.append(f"• {name} 因素使价格下降约{val_abs}元/平米")
+        if neg_lines:
+            advice_parts.append("【主要折价因素】\n" + "\n".join(neg_lines))
+    
+    # ---- 4. 城市层面宏观提示 ----
+    city_advice = {
+        "济南市": "作为省会，长期发展潜力较好，地铁沿线或优质学区房源保值能力更强。",
+        "烟台市": "沿海宜居城市，建议关注海景资源、旅游配套及开发区规划。",
+        "济宁市": "本地自住需求为主，房价相对平稳，可重点考察学校、医院周边房源。"
+    }
+    advice_parts.append(f"【城市洞察】{city_advice.get(city, '根据当地市场情况综合判断。')}")
+    
+    # ---- 5. 综合购买建议 ----
+    if pred_price > 20000:
+        purchase_advice = "当前价格处于较高水平，建议仔细对比同地段类似房源，重点关注房屋质量及稀缺资源（如真学区、地铁口）。"
+    elif pred_price < 8000:
+        purchase_advice = "价格明显低于区域平均水平，性价比突出，但需谨慎排查房屋产权、质量隐患或周边不利设施。"
+    else:
+        purchase_advice = "价格属于合理区间，可根据自身通勤需求、学区偏好及生活便利性做出决策。"
+    advice_parts.append(f"【购买建议】{purchase_advice}")
+    
+    return "\n\n".join(advice_parts)
 
 # ================== 初始化 session_state ==================
 if 'init_done' not in st.session_state:
@@ -223,10 +323,8 @@ with col_city:
 with col_year:
     selected_year = st.selectbox("选择年份", [2021, 2022, 2023, 2024], key="year_select")
 
-# 重置按钮
 with col_reset:
     if st.button("🔄 重置", key="reset_macro"):
-        # 重置为当前城市和年份的默认值
         default = get_default_macro(selected_city, selected_year)
         st.session_state.income = default["income"]
         st.session_state.gdp = default["gdp"]
@@ -234,7 +332,6 @@ with col_reset:
         st.session_state.tertiary = default["tertiary"]
         st.rerun()
 
-# 如果城市或年份发生变化，自动更新宏观指标（但不会覆盖用户手动修改）
 if selected_city != st.session_state.city or selected_year != st.session_state.year:
     st.session_state.city = selected_city
     st.session_state.year = selected_year
@@ -244,7 +341,6 @@ if selected_city != st.session_state.city or selected_year != st.session_state.y
     st.session_state.population = default["population"]
     st.session_state.tertiary = default["tertiary"]
 
-# 显示宏观输入框
 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
 with col_m1:
     st.number_input("人均可支配收入 (元)", key="income", min_value=30000, max_value=100000, step=1000)
@@ -340,6 +436,7 @@ with col_right:
 
     if predict_btn:
         try:
+            # 构建输入字典
             input_dict = {
                 '建筑面积': st.session_state.area,
                 '房龄': st.session_state.age,
@@ -374,8 +471,23 @@ with col_right:
             with st.spinner("模型计算中，请稍候..."):
                 pred = predict_price(input_dict)
                 fig = plot_shap_waterfall_clean(input_dict)
+
+                # 计算SHAP贡献用于生成建议
+                explainer = shap.TreeExplainer(model)
+                shap_values = explainer.shap_values(pd.DataFrame([input_dict])[FEATURE_COLS])
+                feature_contrib = list(zip(FEATURE_COLS, shap_values[0]))
+                feature_contrib.sort(key=lambda x: x[1], reverse=True)
+                top_positive = [(name, round(val, 0)) for name, val in feature_contrib if val > 0][:5]
+                top_negative = [(name, round(val, 0)) for name, val in feature_contrib if val < 0][:5]
+
+                # 生成建议（无需API）
+                advice = generate_advice_from_shap(
+                    pred, top_positive, top_negative,
+                    input_dict, st.session_state.city
+                )
             st.session_state['pred'] = pred
             st.session_state['fig'] = fig
+            st.session_state['advice'] = advice
         except Exception as e:
             st.error(f"预测失败: {str(e)}")
 
@@ -390,6 +502,10 @@ with col_right:
 
         st.caption(f"📊 训练集基准均价：{y_train_mean:.0f} 元/平米")
         st.caption(f"⚙️ 模型误差 RMSE：{train_rmse:.0f} ｜ 相对误差：{train_mape_percent:.1f}%")
+
+        # 显示AI建议（基于规则）
+        st.markdown("<div class='section-title'>💡 AI购房建议</div>", unsafe_allow_html=True)
+        st.markdown(f'<div class="advice-card">{st.session_state.advice}</div>', unsafe_allow_html=True)
 
         st.markdown("<div class='section-title'>🔍 房价影响因素深度分析</div>", unsafe_allow_html=True)
         st.pyplot(st.session_state.fig, use_container_width=True)
@@ -413,7 +529,7 @@ with col_right:
             2. 点击「重置」按钮可将宏观数据恢复为当前城市/年份的默认值<br>
             3. 填写房屋基础属性、周边配套参数<br>
             4. 点击【开始预测房价】按钮一键计算<br>
-            5. 自动生成因素分解图，直观查看涨跌原因
+            5. 自动生成因素分解图及智能化购房建议（基于SHAP归因）
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -421,6 +537,6 @@ with col_right:
 # ================== 页脚 ==================
 st.markdown("---")
 st.markdown(
-    "<p style='text-align: center; color: #86909c;'>© 房价预测系统 | XGBoost+SHAP | 数据范围：山东济南/烟台/济宁 2021-2024</p>",
+    "<p style='text-align: center; color: #86909c;'>© 2025 房价预测系统 | XGBoost+SHAP | 数据范围：山东济南/烟台/济宁 2021-2024 | 购房建议由系统自动生成，仅供参考</p>",
     unsafe_allow_html=True
 )
