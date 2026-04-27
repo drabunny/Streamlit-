@@ -4,36 +4,14 @@ import numpy as np
 import joblib
 import shap
 import matplotlib.pyplot as plt
-import matplotlib
 from sklearn.preprocessing import LabelEncoder
-
-# ================== 设置中文字体（解决云环境缺字体问题） ==================
-def set_chinese_font():
-    """强制 matplotlib 使用支持中文的字体"""
-    # 尝试多个常见中文字体（按优先级）
-    font_candidates = [
-        'SimHei', 'Microsoft YaHei', 'WenQuanYi Zen Hei',
-        'Noto Sans CJK SC', 'Arial Unicode MS', 'DejaVu Sans'
-    ]
-    available_fonts = [f.name for f in matplotlib.font_manager.fontManager.ttflist]
-    for font in font_candidates:
-        if font in available_fonts:
-            matplotlib.rcParams['font.sans-serif'] = [font]
-            matplotlib.rcParams['axes.unicode_minus'] = False
-            print(f"✓ 使用中文字体: {font}")
-            return
-    # 若都不存在，使用默认并警告
-    matplotlib.rcParams['font.sans-serif'] = ['DejaVu Sans']
-    matplotlib.rcParams['axes.unicode_minus'] = False
-    print("⚠️ 未找到中文字体，中文可能显示为方块")
-
-set_chinese_font()
 
 # ================== 页面配置 ==================
 st.set_page_config(
     page_title="房价预测与影响因素分析系统",
     page_icon="🏠",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # ================== 加载模型与预处理对象 ==================
@@ -51,6 +29,39 @@ except FileNotFoundError as e:
     st.error(f"❌ 缺少必要的模型文件：{e}\n请确保 best_xgboost_tuned.pkl, feature_columns.pkl, label_encoders.pkl, y_train_mean.npy 在当前目录下。")
     st.stop()
 
+# ================== 特征名英文化映射（用于SHAP图，避免中文字体缺失）==================
+FEATURE_NAMES_EN = {
+    '建筑面积': 'Area (sqm)',
+    '房龄': 'Building Age (years)',
+    '朝向': 'Orientation',
+    '装修': 'Decoration',
+    '有无电梯': 'Elevator',
+    'dist_地铁站': 'Distance to Subway (m)',
+    'count_地铁站_within_10000m': '# Subway Stations (10km)',
+    'dist_公交站': 'Distance to Bus Stop (m)',
+    'count_公交站_within_10000m': '# Bus Stops (10km)',
+    'dist_学校': 'Distance to School (m)',
+    'count_学校_within_10000m': '# Schools (10km)',
+    'dist_综合医院': 'Distance to General Hospital (m)',
+    'count_综合医院_within_10000m': '# General Hospitals (10km)',
+    'dist_诊所/社区医院': 'Distance to Clinic (m)',
+    'count_诊所/社区医院_within_10000m': '# Clinics (10km)',
+    'dist_药店': 'Distance to Pharmacy (m)',
+    'count_药店_within_10000m': '# Pharmacies (10km)',
+    'dist_大型商场': 'Distance to Mall (m)',
+    'count_大型商场_within_10000m': '# Malls (10km)',
+    'dist_小型商业': 'Distance to Small Business (m)',
+    'count_小型商业_within_10000m': '# Small Businesses (10km)',
+    'dist_餐饮': 'Distance to Restaurant (m)',
+    'count_餐饮_within_10000m': '# Restaurants (10km)',
+    'dist_公园': 'Distance to Park (m)',
+    'count_公园_within_10000m': '# Parks (10km)',
+    '城镇居民人均可支配收入': 'Disposable Income (RMB)',
+    '人均GDP': 'GDP per Capita (RMB)',
+    '常住人口': 'Population (10k)',
+    '第三产业占比': 'Tertiary Industry (%)'
+}
+
 # ================== 辅助函数 ==================
 def encode_categorical(value, encoder):
     try:
@@ -66,26 +77,28 @@ def predict_price(input_dict):
     return model.predict(input_df)[0]
 
 def plot_shap_waterfall(input_dict):
-    """生成SHAP瀑布图，修复字体和尺寸问题"""
+    """生成SHAP瀑布图，使用英文特征名避免字体问题，返回figure对象"""
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
     
+    # 获取英文特征名列表
+    en_feature_names = [FEATURE_NAMES_EN.get(name, name) for name in FEATURE_COLS]
+    
     # 创建较大尺寸的图
-    plt.figure(figsize=(12, 6))
-    # 调用 waterfall_plot，不使用 fontsize 参数
+    fig = plt.figure(figsize=(12, 6))
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
             base_values=explainer.expected_value,
             data=input_df.iloc[0].values,
-            feature_names=FEATURE_COLS
+            feature_names=en_feature_names
         ),
         show=False,
         max_display=15  # 显示最多15个特征
     )
     plt.tight_layout()
-    return plt
+    return fig
 
 # ================== 页面标题 ==================
 st.title("🏠 房价预测与影响因素分析系统")
@@ -93,7 +106,7 @@ st.markdown("基于 XGBoost 模型的二手房单价预测，并利用 SHAP 方�
 
 # ================== 侧边栏：宏观指标 ==================
 st.sidebar.header("📊 宏观经济指标（可选）")
-use_macro = st.sidebar.checkbox("使用自定义宏观指标", value=False)
+use_macro = st.sidebar.checkbox("使用自定义宏观指标", value=False, help="默认使用济南市2023年数据")
 if use_macro:
     income = st.sidebar.number_input("城镇居民人均可支配收入 (元)", min_value=30000, max_value=100000, value=62506, step=1000)
     gdp = st.sidebar.number_input("人均GDP (元)", min_value=50000, max_value=200000, value=135200, step=5000)
@@ -102,8 +115,8 @@ if use_macro:
 else:
     income, gdp, population, tertiary = 62506, 135200, 943.7, 62.8
 
-# ================== 主界面：三列布局 ==================
-col_left, col_mid, col_right = st.columns([1, 1, 1.2], gap="medium")
+# ================== 主界面：三列布局（右侧加宽）==================
+col_left, col_mid, col_right = st.columns([1, 1.2, 1.5], gap="medium")
 
 with col_left:
     st.subheader("🏷️ 房屋本体属性")
@@ -191,10 +204,10 @@ with col_right:
             try:
                 fig = plot_shap_waterfall(input_dict)
                 st.pyplot(fig)
-                plt.close(fig)
+                plt.close(fig)   # 关闭图形释放内存
             except Exception as e:
                 st.error(f"生成SHAP图时出错：{str(e)}")
-                st.info("提示：可能是中文字体问题，请检查部署环境是否支持中文。预测功能仍正常。")
+                st.info("提示：预测功能正常，图表生成可能因环境缺少依赖而失败。")
     else:
         st.info("👈 请填写左侧特征，然后点击「开始预测」按钮。")
 
