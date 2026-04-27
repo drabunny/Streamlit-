@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ================== 自定义CSS样式（优化美化版） ==================
+# ================== 自定义CSS样式（美化版） ==================
 st.markdown("""
 <style>
     /* 全局样式 */
@@ -125,7 +125,8 @@ try:
     plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name()
     plt.rcParams['axes.unicode_minus'] = False
 except:
-    pass
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False
 
 # ================== 城市宏观数据预设 ==================
 CITY_MACRO = {
@@ -148,12 +149,17 @@ def predict_price(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     return model.predict(input_df)[0]
 
+# ========== 【重点优化】SHAP瀑布图 更直观、配色分明、字体加大 ==========
 def plot_shap_waterfall(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
+    
     plt.clf()
-    fig = plt.figure(figsize=(12, 6), dpi=120)
+    # 加大画布，宽屏展示
+    fig = plt.figure(figsize=(14, 7), dpi=150)
+    
+    # 自定义配色：红色=正向抬价，蓝色=负向降价
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
@@ -162,9 +168,15 @@ def plot_shap_waterfall(input_dict):
             feature_names=FEATURE_COLS
         ),
         show=False,
-        max_display=12
+        max_display=15,   # 多展示关键因子
+        # 配色强化区分
     )
-    plt.tight_layout()
+
+    # 全局字体放大
+    plt.xticks(fontsize=10)
+    plt.yticks(fontsize=10)
+    plt.title("房价关键影响因素分解 | 红色=提升房价  蓝色=拉低房价", fontsize=12, pad=15, color="#2c3e50")
+    plt.tight_layout(pad=2.0)
     return fig
 
 # ================== 初始化 session_state 默认值 ==================
@@ -207,7 +219,7 @@ if 'init_done' not in st.session_state:
 # ================== 页面标题 ==================
 st.markdown("<h1 style='text-align: center; color: #1e293b; margin-bottom: 2rem;'>🏠 房价预测与影响因素分析系统</h1>", unsafe_allow_html=True)
 
-# ================== 宏观指标模块（优化布局） ==================
+# ================== 宏观指标模块 ==================
 st.markdown("<div class='section-title'>📊 城市宏观经济指标</div>", unsafe_allow_html=True)
 with st.container():
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -365,7 +377,7 @@ with col_right:
         
         # SHAP分析结果
         st.markdown("<div class='section-title' style='margin-top: 1.5rem;'>🔍 价格影响因素分析</div>", unsafe_allow_html=True)
-        st.pyplot(st.session_state.fig)
+        st.pyplot(st.session_state.fig, use_container_width=True)
         
         # 下载功能
         buf = BytesIO()
