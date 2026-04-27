@@ -19,7 +19,6 @@ st.set_page_config(
 # ================== CSS ==================
 st.markdown("""
 <style>
-
     .stApp {
         background-color: #f5f7fa;
     }
@@ -97,7 +96,6 @@ st.markdown("""
     .stNumberInput, .stSelectbox {
         margin-bottom: 0.8rem;
     }
-
     .info-card {
         background-color: #f7f8fa;
         padding: 1.25rem;
@@ -163,6 +161,7 @@ def plot_shap_waterfall(input_dict):
     shap_values = explainer.shap_values(input_df)
 
     plt.clf()
+
     fig = plt.figure(figsize=(16, 8), dpi=180, facecolor="#ffffff")
     ax = plt.gca()
     ax.set_facecolor("#ffffff")
@@ -178,13 +177,12 @@ def plot_shap_waterfall(input_dict):
         max_display=18,
     )
 
-    plt.xticks(fontsize=11)
-    plt.yticks(fontsize=10)
+    plt.xticks(fontsize=11, color="#333333")
+    plt.yticks(fontsize=10, color="#222222")
 
-    # 标题清晰说明 不用解释也能看懂
     plt.title(
-        "房价影响因素贡献分解图\n红色：正向提升房价 ｜ 蓝色：负向拉低房价",
-        fontsize=13, pad=20, weight='bold'
+        "房价影响因素贡献分解图\n红色：正向提升房价 ｜ 蓝：负向拉低房价",
+        fontsize=13, pad=20, color="#1f2937", weight='bold'
     )
 
     ax.grid(axis='x', alpha=0.25, linestyle='--')
