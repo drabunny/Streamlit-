@@ -14,14 +14,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# ================== ❤️ 修复中文显示问题 ==================
 font_path = "wqy-microhei.ttf"  # 请确保此字体文件在项目根目录
 # 注册字体
 fm.fontManager.addfont(font_path)
 # 设置中文字体
 plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name()
 plt.rcParams['axes.unicode_minus'] = False
-# =================================================
 
 # ================== 加载模型与处理对象 ==================
 @st.cache_resource
