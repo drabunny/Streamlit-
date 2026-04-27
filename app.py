@@ -6,7 +6,6 @@ import shap
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 from sklearn.preprocessing import LabelEncoder
-import os   # 添加 os 模块以支持文件检查
 
 # ================== 页面配置 ==================
 st.set_page_config(
@@ -15,17 +14,16 @@ st.set_page_config(
     layout="wide"
 )
 
-# ================== 字体与负号修复 ==================
-font_path = "simhei.ttf"   # 确保此文件在项目根目录
-if os.path.exists(font_path):
-    fm.fontManager.addfont(font_path)
-    plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'simhei', 'Arial', 'sans-serif']
-    plt.rcParams['axes.unicode_minus'] = False
-else:
-    st.warning("未找到 simhei.ttf，中文可能无法显示，但预测功能正常。")
-# =====================================================
+# ================== ❤️ 修复中文显示问题 ==================
+font_path = "wqy-microhei.ttf"  # 请确保此字体文件在项目根目录
+# 注册字体
+fm.fontManager.addfont(font_path)
+# 设置中文字体
+plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name()
+plt.rcParams['axes.unicode_minus'] = False
+# =================================================
 
-# ================== 加载模型与预处理对象 ==================
+# ================== 加载模型与处理对象 ==================
 @st.cache_resource
 def load_artifacts():
     model = joblib.load("best_xgboost_tuned.pkl")
@@ -67,7 +65,7 @@ def plot_shap_waterfall(input_dict):
             values=shap_values[0],
             base_values=explainer.expected_value,
             data=input_df.iloc[0].values,
-            feature_names=FEATURE_COLS  # 使用中文特征名
+            feature_names=FEATURE_COLS  # 此处返回的是中文列表，图表将显示中文
         ),
         show=False,
         max_display=15
