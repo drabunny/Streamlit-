@@ -4,37 +4,7 @@ import numpy as np
 import joblib
 import shap
 import matplotlib.pyplot as plt
-import matplotlib
 from sklearn.preprocessing import LabelEncoder
-import os
-import requests
-
-# ================== 下载并安装中文字体（解决云环境缺字体） ==================
-def install_chinese_font():
-    """下载文泉驿微米黑字体并设置为matplotlib默认"""
-    font_path = "/tmp/wqy-microhei.ttc"
-    if not os.path.exists(font_path):
-        try:
-            url = "https://github.com/StellarCN/scp_zh/raw/master/fonts/wqy-microhei.ttc"
-            response = requests.get(url, timeout=10)
-            with open(font_path, "wb") as f:
-                f.write(response.content)
-        except:
-            # 若下载失败，尝试备用源
-            try:
-                url2 = "https://raw.githubusercontent.com/StellarCN/scp_zh/master/fonts/wqy-microhei.ttc"
-                response = requests.get(url2, timeout=10)
-                with open(font_path, "wb") as f:
-                    f.write(response.content)
-            except:
-                st.warning("⚠️ 中文字体下载失败，SHAP图可能无法显示中文。")
-                return
-    if os.path.exists(font_path):
-        matplotlib.font_manager.fontManager.addfont(font_path)
-        plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'Microsoft YaHei', 'SimHei']
-        plt.rcParams['axes.unicode_minus'] = False
-
-install_chinese_font()
 
 # ================== 页面配置 ==================
 st.set_page_config(
@@ -58,6 +28,40 @@ except FileNotFoundError as e:
     st.error(f"❌ 缺少必要的模型文件：{e}\n请确保 best_xgboost_tuned.pkl, feature_columns.pkl, label_encoders.pkl, y_train_mean.npy 在当前目录下。")
     st.stop()
 
+# ================== 特征名英文化（用于 SHAP 图，避免中文字体问题）==================
+FEATURE_NAMES_EN = {
+    '建筑面积': 'Area(sqm)',
+    '房龄': 'Age',
+    '朝向': 'Orient.',
+    '装修': 'Decoration',
+    '有无电梯': 'Elevator',
+    'dist_地铁站': 'Dist_subway',
+    'count_地铁站_within_10000m': 'N_subway',
+    'dist_公交站': 'Dist_bus',
+    'count_公交站_within_10000m': 'N_bus',
+    'dist_学校': 'Dist_school',
+    'count_学校_within_10000m': 'N_school',
+    'dist_综合医院': 'Dist_hospital',
+    'count_综合医院_within_10000m': 'N_hospital',
+    'dist_诊所/社区医院': 'Dist_clinic',
+    'count_诊所/社区医院_within_10000m': 'N_clinic',
+    'dist_药店': 'Dist_pharmacy',
+    'count_药店_within_10000m': 'N_pharmacy',
+    'dist_大型商场': 'Dist_mall',
+    'count_大型商场_within_10000m': 'N_mall',
+    'dist_小型商业': 'Dist_smallBiz',
+    'count_小型商业_within_10000m': 'N_smallBiz',
+    'dist_餐饮': 'Dist_catering',
+    'count_餐饮_within_10000m': 'N_catering',
+    'dist_公园': 'Dist_park',
+    'count_公园_within_10000m': 'N_park',
+    '城镇居民人均可支配收入': 'Income',
+    '人均GDP': 'GDP_percap',
+    '常住人口': 'Population',
+    '第三产业占比': 'Tertiary'
+}
+FEATURE_NAMES_EN_LIST = [FEATURE_NAMES_EN.get(name, name) for name in FEATURE_COLS]
+
 # ================== 辅助函数 ==================
 def encode_categorical(value, encoder):
     try:
@@ -73,21 +77,19 @@ def predict_price(input_dict):
     return model.predict(input_df)[0]
 
 def plot_shap_waterfall(input_dict):
-    """生成清晰的SHAP瀑布图，使用中文，返回figure对象"""
+    """生成 SHAP 瀑布图，使用英文特征名，返回 figure 对象"""
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
     
-    # 清除当前图形，防止重影
-    plt.clf()
-    # 创建大尺寸图
+    plt.clf()  # 清除旧图形，防止重叠
     fig = plt.figure(figsize=(12, 6), dpi=100)
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
             base_values=explainer.expected_value,
             data=input_df.iloc[0].values,
-            feature_names=FEATURE_COLS
+            feature_names=FEATURE_NAMES_EN_LIST
         ),
         show=False,
         max_display=15
@@ -208,6 +210,6 @@ with col_right:
     else:
         st.info("👈 请填写左侧特征，然后点击「开始预测」按钮。")
     
-    # 将说明注释放到结果列下方，而不是整个页面底部
+    # 说明注释放置在结果列底部
     st.markdown("---")
     st.caption("注：预测基于 XGBoost 模型（2021-2024年山东省济南/烟台/济宁数据），SHAP瀑布图显示各特征对预测值的影响贡献。")
