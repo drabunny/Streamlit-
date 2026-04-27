@@ -160,43 +160,32 @@ def plot_shap_waterfall(input_dict):
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
     expected_value = explainer.expected_value
-    # 计算最终预测值
     final_pred = predict_price(input_dict)
 
-    # 提取SHAP值和特征名
     values = shap_values[0]
     feature_names = FEATURE_COLS
-    # 按绝对值降序排列
-    order = np.argsort(np.abs(values))[::-1]  # 从大到小
+    order = np.argsort(np.abs(values))[::-1]
     values_sorted = values[order]
-    feature_names_sorted = [feature_names[i] for i in order if abs(values[i]) > 1e-6]  # 忽略几乎为0的特征
+    feature_names_sorted = [feature_names[i] for i in order if abs(values[i]) > 1e-6]
     values_sorted = values_sorted[:len(feature_names_sorted)]
 
-    # 构建累计贡献位置
     cumulative = np.cumsum(values_sorted)
-    # 计算起始点
     start = expected_value
     positions = np.concatenate(([start], start + cumulative[:-1]))
     ends = start + cumulative
 
-    # 创建画布
     fig, ax = plt.subplots(figsize=(12, max(6, len(feature_names_sorted) * 0.4)), facecolor='white')
     ax.set_facecolor('white')
 
-    # 绘制每个特征的贡献段（瀑布段）
     y_pos = np.arange(len(feature_names_sorted))
     colors = ['#ff7c80' if v > 0 else '#588c7e' for v in values_sorted]
 
     for i, (v, start_x, end_x) in enumerate(zip(values_sorted, positions, ends)):
-        # 绘制水平线段
         ax.hlines(y=i, xmin=start_x, xmax=end_x, color=colors[i], linewidth=6, alpha=0.8)
-        # 标记数值
         ax.text(end_x, i, f'{v:+.0f}', va='center', ha='left' if v > 0 else 'right', fontsize=9, color='#333')
-        # 在起点添加竖线（可选）
         if i == 0:
             ax.vlines(x=start_x, ymin=i-0.4, ymax=i+0.4, linestyle='--', color='gray', linewidth=1)
 
-    # 设置Y轴标签
     ax.set_yticks(y_pos)
     ax.set_yticklabels(feature_names_sorted, fontsize=10)
     ax.set_ylim(-0.5, len(feature_names_sorted) - 0.5)
@@ -236,11 +225,13 @@ if 'init_done' not in st.session_state:
     st.session_state.count_catering = 30
     st.session_state.dist_park = 1000
     st.session_state.count_park = 2
+    # 宏观数据初始值（济南市）
     default_macro = CITY_MACRO['济南市']
     st.session_state.income = default_macro['income']
     st.session_state.gdp = default_macro['gdp']
     st.session_state.population = default_macro['population']
     st.session_state.tertiary = default_macro['tertiary']
+    st.session_state.macro_auto_fill = True   # 控制自动填充
     st.session_state.init_done = True
 
 # ================== 页面主标题 ==================
@@ -249,8 +240,26 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ================== 宏观经济指标 ==================
+# ================== 宏观经济指标（增加城市选择）==================
 st.markdown("<div class='section-title'>📊 城市宏观经济指标</div>", unsafe_allow_html=True)
+
+selected_city = st.selectbox(
+    "选择预置城市（将自动填充下方宏观数据）",
+    ["济南市", "烟台市", "济宁市", "自定义"],
+    index=0
+)
+
+if selected_city != "自定义" and selected_city in CITY_MACRO:
+    if st.session_state.get('macro_auto_fill', True):
+        default_macro = CITY_MACRO[selected_city]
+        st.session_state.income = default_macro['income']
+        st.session_state.gdp = default_macro['gdp']
+        st.session_state.population = default_macro['population']
+        st.session_state.tertiary = default_macro['tertiary']
+        st.session_state.macro_auto_fill = False
+else:
+    st.session_state.macro_auto_fill = True
+
 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
 with col_m1:
     st.number_input("城镇居民人均可支配收入 (元)", key="income", min_value=30000, max_value=100000, step=1000)
