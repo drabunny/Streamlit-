@@ -19,9 +19,7 @@ st.set_page_config(
 # ================== CSS ==================
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #f5f7fa;
-    }
+    .stApp { background-color: #f5f7fa; }
     .main > div {
         background-color: #ffffff;
         border-radius: 20px;
@@ -54,17 +52,8 @@ st.markdown("""
         border-left: 6px solid #1677ff;
         text-align: center;
     }
-    .metric-value {
-        font-size: 3rem;
-        font-weight: 800;
-        color: #1677ff;
-        line-height: 1.1;
-    }
-    .metric-unit {
-        font-size: 1.25rem;
-        color: #4e5969;
-        font-weight: 500;
-    }
+    .metric-value { font-size: 3rem; font-weight: 800; color: #1677ff; line-height: 1.1; }
+    .metric-unit { font-size: 1.25rem; color: #4e5969; font-weight: 500; }
     .section-title {
         font-size: 1.25rem;
         font-weight: 700;
@@ -87,10 +76,7 @@ st.markdown("""
         border-left: 4px solid #1677ff;
         margin-top: 1rem;
     }
-    hr {
-        border-color: #f0f0f0;
-        margin: 1.5rem 0;
-    }
+    hr { border-color: #f0f0f0; margin: 1.5rem 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -132,6 +118,9 @@ MACRO_DATA = {
     ("济宁市", 2024): {"income": 47812, "gdp": 71600, "population": 818.73, "tertiary": 52.07},
 }
 
+def get_default_macro(city, year):
+    return MACRO_DATA.get((city, year), MACRO_DATA[("济南市", 2023)])
+
 # ================== 辅助函数 ==================
 def encode_categorical(value, encoder):
     try:
@@ -146,6 +135,7 @@ def predict_price(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     return model.predict(input_df)[0]
 
+# ================== SHAP瀑布图 ==================
 def plot_shap_waterfall_clean(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     explainer = shap.TreeExplainer(model)
@@ -153,8 +143,8 @@ def plot_shap_waterfall_clean(input_dict):
     expected_value = explainer.expected_value
     final_pred = predict_price(input_dict)
 
-    # 绘制瀑布图
-    fig = plt.figure(figsize=(14, 8), facecolor='white')
+    # 创建图形
+    fig = plt.figure(figsize=(12, 8), facecolor='white')
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
@@ -165,21 +155,20 @@ def plot_shap_waterfall_clean(input_dict):
         show=False,
         max_display=15
     )
-    
-    # 获取当前 axes
     ax = plt.gca()
-    # 隐藏图中可能重复的数值文本（包含 "model output value" 和 "base value" 的文本）
+
+    texts_to_hide = []
     for text in ax.texts:
         txt = text.get_text()
-        if 'model output' in txt.lower() or 'base value' in txt.lower():
-            text.set_visible(False)
-    # 修改标题，突出最终预测值
-    ax.set_title(f'房价影响因素瀑布图\n最终预测值: {final_pred:.0f} 元/平米', fontsize=14, pad=20)
-    # 在右下角添加一个标注框，显示预测值（可选但更清晰）
-    ax.annotate(f'预测值 = {final_pred:.0f}', xy=(0.95, 0.05), xycoords='axes fraction',
-                fontsize=12, ha='right', color='#1677ff', weight='bold',
-                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="#1677ff"))
-    plt.tight_layout()
+        if any(key in txt.lower() for key in ['model output', 'base value', 'f(x)=', 'e[f(x)]=', 'output value']):
+            texts_to_hide.append(text)
+        if text.get_position()[1] > 0.9 and txt.replace('.', '').replace('-', '').isdigit():
+            texts_to_hide.append(text)
+    for text in texts_to_hide:
+        text.set_visible(False)
+
+    ax.set_title(f'房价影响因素分解图\n最终预测值：{final_pred:.0f} 元/平米', fontsize=14, pad=20)
+
     return fig
 
 # ================== 初始化 session_state ==================
@@ -212,8 +201,7 @@ if 'init_done' not in st.session_state:
     # 默认城市和年份
     st.session_state.city = "济南市"
     st.session_state.year = 2023
-    # 初始宏观数据
-    default_macro = MACRO_DATA.get((st.session_state.city, st.session_state.year), MACRO_DATA[("济南市", 2023)])
+    default_macro = get_default_macro(st.session_state.city, st.session_state.year)
     st.session_state.income = default_macro["income"]
     st.session_state.gdp = default_macro["gdp"]
     st.session_state.population = default_macro["population"]
@@ -226,30 +214,40 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ================== 宏观经济指标（带城市年份选择）==================
+# ================== 宏观经济指标（带重置按钮）==================
 st.markdown("<div class='section-title'>📊 城市宏观经济指标</div>", unsafe_allow_html=True)
 
-# 城市和年份选择
-col_city, col_year, _ = st.columns([1, 1, 2])
+col_city, col_year, col_reset = st.columns([1, 1, 0.5])
 with col_city:
     selected_city = st.selectbox("选择城市", ["济南市", "烟台市", "济宁市"], key="city_select")
 with col_year:
     selected_year = st.selectbox("选择年份", [2021, 2022, 2023, 2024], key="year_select")
 
-# 根据选择更新宏观数据（如果发生变化）
+# 重置按钮
+with col_reset:
+    if st.button("🔄 重置", key="reset_macro"):
+        # 重置为当前城市和年份的默认值
+        default = get_default_macro(selected_city, selected_year)
+        st.session_state.income = default["income"]
+        st.session_state.gdp = default["gdp"]
+        st.session_state.population = default["population"]
+        st.session_state.tertiary = default["tertiary"]
+        st.rerun()
+
+# 如果城市或年份发生变化，自动更新宏观指标（但不会覆盖用户手动修改）
 if selected_city != st.session_state.city or selected_year != st.session_state.year:
     st.session_state.city = selected_city
     st.session_state.year = selected_year
-    macro_vals = MACRO_DATA.get((selected_city, selected_year), MACRO_DATA[("济南市", 2023)])
-    st.session_state.income = macro_vals["income"]
-    st.session_state.gdp = macro_vals["gdp"]
-    st.session_state.population = macro_vals["population"]
-    st.session_state.tertiary = macro_vals["tertiary"]
+    default = get_default_macro(selected_city, selected_year)
+    st.session_state.income = default["income"]
+    st.session_state.gdp = default["gdp"]
+    st.session_state.population = default["population"]
+    st.session_state.tertiary = default["tertiary"]
 
-# 显示可编辑的宏观指标
+# 显示宏观输入框
 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
 with col_m1:
-    st.number_input("城镇居民人均可支配收入 (元)", key="income", min_value=30000, max_value=100000, step=1000)
+    st.number_input("人均可支配收入 (元)", key="income", min_value=30000, max_value=100000, step=1000)
 with col_m2:
     st.number_input("人均GDP (元)", key="gdp", min_value=50000, max_value=200000, step=5000)
 with col_m3:
@@ -412,9 +410,10 @@ with col_right:
             <h4 style='margin-top:0; color:#1677ff;'>💡 操作指南</h4>
             <p style='margin-bottom:0; line-height:1.7;'>
             1. 选择城市和年份，自动填充宏观数据，也可手动修改<br>
-            2. 填写房屋基础属性、周边配套参数<br>
-            3. 点击【开始预测房价】按钮一键计算<br>
-            4. 自动生成因素分解图，直观查看涨跌原因
+            2. 点击「重置」按钮可将宏观数据恢复为当前城市/年份的默认值<br>
+            3. 填写房屋基础属性、周边配套参数<br>
+            4. 点击【开始预测房价】按钮一键计算<br>
+            5. 自动生成因素分解图，直观查看涨跌原因
             </p>
         </div>
         """, unsafe_allow_html=True)
