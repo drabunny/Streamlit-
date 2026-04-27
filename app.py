@@ -160,39 +160,29 @@ def predict_price(input_dict):
 def plot_shap_waterfall(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(input_df)[0]
-    base_value = explainer.expected_value
-    features = input_df.iloc[0].values
-    feature_names = FEATURE_COLS
+    shap_values = explainer.shap_values(input_df)
 
-    # 取前15个重要特征，避免拥挤
-    top_idx = np.argsort(np.abs(shap_values))[-15:]
-    shap_v = shap_values[top_idx][::-1]
-    feat_n = np.array(feature_names)[top_idx][::-1]
-    feat_v = features[top_idx][::-1]
-
-    # 计算瀑布图位置
-    cum_shap = np.cumsum(shap_v)
-    start = np.concatenate([[base_value], base_value + cum_shap[:-1]])
-    end = base_value + cum_shap
-
-    # 手动绘制画布
     plt.clf()
-    fig, ax = plt.subplots(figsize=(14, 8), dpi=150, facecolor="white")
-    ax.set_facecolor("white")
+    fig = plt.figure(figsize=(14, 8), dpi=150, facecolor="#ffffff")
+    
+    shap.waterfall_plot(
+        shap.Explanation(
+            values=shap_values[0],
+            base_values=explainer.expected_value,
+            data=input_df.iloc[0].values,
+            feature_names=FEATURE_COLS
+        ),
+        show=False
+    )
 
-    # 绘制条形：红=正向，绿=负向
-    for i in range(len(shap_v)):
-        color = "#ff4d4f" if shap_v[i] > 0 else "#20c997"
-        ax.barh(i, abs(shap_v[i]), left=start[i], color=color, alpha=0.9)
+    ax = plt.gca()
+    ax.set_facecolor("#ffffff")
+    for idx, text in enumerate(ax.texts):
+        if idx < len(ax.texts) - 1:
+            text.set_visible(False)
 
-    # 自定义设置
-    ax.set_yticks(range(len(feat_n)))
-    ax.set_yticklabels(feat_n, fontsize=9)
-    ax.set_xlabel("SHAP 值", fontsize=10)
-    ax.set_title("房价影响因素贡献分解图\n正向提升房价 ｜ 负向拉低房价", 
-                 fontsize=12, pad=20, weight="bold")
-    ax.grid(axis='x', alpha=0.2)
+    plt.xticks(fontsize=10)
+    plt.yticks(fontsize=9)
     plt.subplots_adjust(left=0.35)
 
     return fig
