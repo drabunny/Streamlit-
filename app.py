@@ -16,105 +16,97 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ================== 全局CSS ==================
+# ================== CSS ==================
 st.markdown("""
 <style>
-    /* 全局渐变背景 */
     .stApp {
-        background: linear-gradient(135deg, #f0f4f8 0%, #e8f4fc 50%, #f5f9ff 100%);
-        background-attachment: fixed;
+        background-color: #f5f7fa;
     }
 
-    /* 主内容容器磨砂质感 */
     .main > div {
-        background: rgba(255, 255, 255, 0.75);
-        backdrop-filter: blur(10px);
-        border-radius: 24px;
-        padding: 2rem;
-        margin: 0.5rem;
+        background-color: #ffffff;
+        border-radius: 20px;
+        padding: 2.5rem;
+        margin: 1rem;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
     }
 
-    /* 按钮高级样式 */
     .stButton > button {
-        background: linear-gradient(135deg, #1677ff 0%, #40a9ff 100%);
+        background: linear-gradient(135deg, #1677ff 0%, #4096ff 100%);
         color: white;
         border: none;
-        border-radius: 14px;
-        padding: 0.8rem 1.5rem;
+        border-radius: 12px;
+        padding: 0.75rem 1.5rem;
         font-weight: 600;
-        font-size: 1.05rem;
+        font-size: 1rem;
         transition: all 0.3s ease;
-        box-shadow: 0 4px 12px rgba(22, 119, 255, 0.2);
+        box-shadow: 0 2px 8px rgba(22, 119, 255, 0.15);
     }
     .stButton > button:hover {
         background: linear-gradient(135deg, #0958d9 0%, #1677ff 100%);
-        box-shadow: 0 6px 20px rgba(22, 119, 255, 0.3);
-        transform: translateY(-3px);
+        box-shadow: 0 4px 12px rgba(22, 119, 255, 0.25);
+        transform: translateY(-2px);
     }
 
-    /* 结果卡片 */
     .result-card {
-        background: linear-gradient(135deg, #ffffff 0%, #f7fbff 100%);
-        border-radius: 20px;
-        padding: 2.5rem;
-        box-shadow: 0 10px 30px rgba(22, 119, 255, 0.12);
-        margin-bottom: 2rem;
-        border-left: 8px solid #1677ff;
+        background-color: #ffffff;
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        margin-bottom: 1.5rem;
+        border-left: 6px solid #1677ff;
         text-align: center;
     }
     .metric-value {
-        font-size: 3.2rem;
-        font-weight: 900;
+        font-size: 3rem;
+        font-weight: 800;
         color: #1677ff;
         line-height: 1.1;
     }
     .metric-unit {
-        font-size: 1.3rem;
-        color: #607489;
+        font-size: 1.25rem;
+        color: #4e5969;
         font-weight: 500;
     }
 
-    /* 分区标题 */
     .section-title {
-        font-size: 1.3rem;
+        font-size: 1.25rem;
         font-weight: 700;
-        color: #1f2937;
-        margin: 1.2rem 0 1rem 0;
-        padding-bottom: 0.6rem;
-        border-bottom: 3px solid #e6f4ff;
-        display: flex;
-        align-items: center;
+        color: #1d2129;
+        margin: 1rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #f0f0f0;
     }
 
-    /* 折叠面板美化 */
     .stExpander {
-        border-radius: 16px !important;
-        box-shadow: 0 3px 15px rgba(0,0,0,0.06);
-        margin-bottom: 1.2rem;
+        border-radius: 12px !important;
+        border: 1px solid #f0f0f0;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+        margin-bottom: 1rem;
         overflow: hidden;
     }
     .stExpander > div > div:first-child {
-        background: #ffffff !important;
+        background-color: #ffffff !important;
+        border-radius: 12px;
+    }
+    .stExpander > div > div:last-child {
+        background-color: #ffffff !important;
     }
 
-    /* 输入控件间距 */
     .stNumberInput, .stSelectbox {
-        margin-bottom: 0.85rem;
+        margin-bottom: 0.8rem;
     }
-
-    /* 提示信息卡片 */
     .info-card {
-        background: linear-gradient(135deg, #f6faff 0%, #ecf7ff 100%);
-        padding: 1.5rem;
-        border-radius: 16px;
-        border-left: 5px solid #40a9ff;
-        margin-top: 1.5rem;
+        background-color: #f7f8fa;
+        padding: 1.25rem;
+        border-radius: 12px;
+        border-left: 4px solid #1677ff;
+        margin-top: 1rem;
     }
 
-    /* 分割线 */
     hr {
-        border-color: #cce4fb;
-        margin: 1.8rem 0;
+        border-color: #f0f0f0;
+        margin: 1.5rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -136,7 +128,7 @@ except FileNotFoundError as e:
     st.error(f"❌ 缺少必要的模型文件：{e}")
     st.stop()
 
-# ================== 中文字体全局稳定配置 ==================
+# ================== 中文字体 ==================
 plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'SimHei', 'Microsoft YaHei']
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.family'] = 'sans-serif'
@@ -186,16 +178,20 @@ def plot_shap_waterfall(input_dict):
         max_display=18,
     )
 
+    # 全局字体放大、清晰化
     plt.xticks(fontsize=11, color="#333333")
     plt.yticks(fontsize=10, color="#222222")
 
+    # 标题清晰说明 不用解释也能看懂
     plt.title(
-        "房价影响因素贡献分解图\n🔴 红色：正向提升房价 ｜ 🟢 青绿色：负向拉低房价",
+        "房价影响因素贡献分解图\n红色：正向提升房价 ｜ 青绿色：负向拉低房价",
         fontsize=13, pad=20, color="#1f2937", weight='bold'
     )
 
+    # 浅色网格辅助阅读 不晃眼
     ax.grid(axis='x', alpha=0.25, linestyle='--')
 
+    # 紧凑留白 杜绝遮挡
     plt.tight_layout(pad=2.5)
     return fig
 
@@ -235,7 +231,7 @@ if 'init_done' not in st.session_state:
 
 # ================== 页面主标题 ==================
 st.markdown(
-    "<h1 style='text-align: center; color: #1677ff; margin-bottom: 2.5rem; font-weight: 800;'>🏠 房价预测与影响因素分析系统</h1>",
+    "<h1 style='text-align: center; color: #1677ff; margin-bottom: 2rem; font-weight: 800;'>🏠 房价预测与影响因素分析系统</h1>",
     unsafe_allow_html=True
 )
 
@@ -415,6 +411,6 @@ with col_right:
 # ================== 页脚 ==================
 st.markdown("---")
 st.markdown(
-    "<p style='text-align: center; color: #718096;'>© 2025 房价预测系统 | XGBoost+SHAP | 数据范围：山东济南/烟台/济宁 2021-2024</p>",
+    "<p style='text-align: center; color: #86909c;'>© 2025 房价预测系统 | XGBoost+SHAP | 数据范围：山东济南/烟台/济宁 2021-2024</p>",
     unsafe_allow_html=True
 )
