@@ -19,10 +19,6 @@ st.set_page_config(
 # ================== 自定义CSS样式 ==================
 st.markdown("""
 <style>
-    /* 卡片样式 */
-    .css-1r6slb0, .stApp {
-        background-color: #f8f9fa;
-    }
     .stButton > button {
         background: linear-gradient(90deg, #0066cc, #0099ff);
         color: white;
@@ -49,14 +45,6 @@ st.markdown("""
         font-weight: bold;
         color: #0066cc;
     }
-    .help-icon {
-        color: #888;
-        font-size: 0.8rem;
-        cursor: help;
-    }
-    hr {
-        margin: 1rem 0;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -71,20 +59,20 @@ def load_artifacts():
 
 try:
     model, FEATURE_COLS, encoders, y_train_mean = load_artifacts()
-    # 训练集误差标准差（用于模拟置信区间，实际可从训练过程获取）
-    train_rmse = 2988.51  # 从之前实验结果填入
+    train_rmse = 2988.51  # 从实验中得到
+    train_mape_percent = (train_rmse / y_train_mean) * 100  # 相对误差百分比
 except FileNotFoundError as e:
-    st.error(f"❌ 缺少必要的模型文件：{e}\n请确保 best_xgboost_tuned.pkl, feature_columns.pkl, label_encoders.pkl, y_train_mean.npy 在当前目录下。")
+    st.error(f"❌ 缺少必要的模型文件：{e}")
     st.stop()
 
 # ================== 中文字体配置 ==================
-font_path = "wqy-microhei.ttf"  # 请确保字体文件存在
+font_path = "wqy-microhei.ttf"
 try:
     fm.fontManager.addfont(font_path)
     plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name()
     plt.rcParams['axes.unicode_minus'] = False
 except:
-    st.warning("字体文件未找到，SHAP图中文字符可能显示异常。")
+    pass
 
 # ================== 城市宏观数据预设 ==================
 CITY_MACRO = {
@@ -127,7 +115,7 @@ def plot_shap_waterfall(input_dict):
     return fig
 
 def get_sample_input():
-    """随机选择一个典型房源样本（可根据实际数据构造）"""
+    """一个示例房源数据"""
     return {
         '建筑面积': 95.0,
         '房龄': 8,
@@ -156,185 +144,217 @@ def get_sample_input():
         'count_公园_within_10000m': 2
     }
 
-# ================== 页面标题与说明 ==================
-st.title("🏠 房价预测与影响因素分析系统")
-st.markdown("基于 **XGBoost 集成学习模型**与 **SHAP 可解释性框架**，为您提供二手房单价预测及关键驱动因素解读。")
+# ================== 初始化 session_state 中的输入值 ==================
+if 'init_done' not in st.session_state:
+    # 房屋本体
+    st.session_state.area = 100.0
+    st.session_state.age = 5
+    st.session_state.orientation = '南'
+    st.session_state.decoration = '精装'
+    st.session_state.elevator = '有'
+    # 微观区位
+    st.session_state.dist_subway = 1500
+    st.session_state.count_subway = 2
+    st.session_state.dist_bus = 500
+    st.session_state.count_bus = 10
+    st.session_state.dist_school = 1000
+    st.session_state.count_school = 5
+    st.session_state.dist_hospital = 2000
+    st.session_state.count_hospital = 2
+    st.session_state.dist_clinic = 800
+    st.session_state.count_clinic = 4
+    st.session_state.dist_pharmacy = 300
+    st.session_state.count_pharmacy = 8
+    st.session_state.dist_mall = 1500
+    st.session_state.count_mall = 1
+    st.session_state.dist_small_business = 200
+    st.session_state.count_small_business = 20
+    st.session_state.dist_catering = 100
+    st.session_state.count_catering = 30
+    st.session_state.dist_park = 1000
+    st.session_state.count_park = 2
+    # 宏观
+    default_macro = CITY_MACRO['济南市']
+    st.session_state.income = default_macro['income']
+    st.session_state.gdp = default_macro['gdp']
+    st.session_state.population = default_macro['population']
+    st.session_state.tertiary = default_macro['tertiary']
+    st.session_state.init_done = True
 
 # ================== 侧边栏快速设置 ==================
 with st.sidebar:
-    st.header("⚙️ 全局设置")
-    city_choice = st.selectbox("选择城市（自动填充宏观指标）", list(CITY_MACRO.keys()), index=0)
-    reset_macro = st.button("📊 重置宏观指标为当前城市默认值")
-    st.markdown("---")
-    st.subheader("🎲 快速测试")
+    st.header("⚙️ 快速测试")
     if st.button("📋 填充示例房源"):
         sample = get_sample_input()
-        st.session_state['sample_loaded'] = sample
-        st.success("示例已加载，请切换到主界面查看")
+        for key, value in sample.items():
+            if key in st.session_state:
+                st.session_state[key] = value
+        st.success("示例已加载！请点击「开始预测」按钮")
+        st.rerun()
+    
     st.markdown("---")
-    st.caption("提示：鼠标悬停在输入框上可查看说明。")
-
-# ================== 宏观指标初始化 ==================
-if 'income' not in st.session_state or reset_macro:
-    default = CITY_MACRO[city_choice]
-    st.session_state.income = default["income"]
-    st.session_state.gdp = default["gdp"]
-    st.session_state.population = default["population"]
-    st.session_state.tertiary = default["tertiary"]
+    selected_city = st.selectbox("城市（自动更新宏观指标）", list(CITY_MACRO.keys()))
+    if st.button("📊 应用该城市宏观指标"):
+        macro = CITY_MACRO[selected_city]
+        st.session_state.income = macro['income']
+        st.session_state.gdp = macro['gdp']
+        st.session_state.population = macro['population']
+        st.session_state.tertiary = macro['tertiary']
+        st.success(f"已应用{selected_city}的宏观数据")
+        st.rerun()
 
 # ================== 宏观指标（可编辑） ==================
 with st.expander("📊 宏观经济指标（可手动调整）", expanded=False):
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
     with col_m1:
-        income = st.number_input("城镇居民人均可支配收入 (元)", min_value=30000, max_value=100000, value=st.session_state.income, step=1000, key="income_input", help="2023年济南市：62506元")
+        st.number_input("城镇居民人均可支配收入 (元)", key="income", min_value=30000, max_value=100000, step=1000)
     with col_m2:
-        gdp = st.number_input("人均GDP (元)", min_value=50000, max_value=200000, value=st.session_state.gdp, step=5000, key="gdp_input")
+        st.number_input("人均GDP (元)", key="gdp", min_value=50000, max_value=200000, step=5000)
     with col_m3:
-        population = st.number_input("常住人口 (万人)", min_value=500.0, max_value=1200.0, value=st.session_state.population, step=10.0, key="pop_input")
+        st.number_input("常住人口 (万人)", key="population", min_value=500.0, max_value=1200.0, step=10.0)
     with col_m4:
-        tertiary = st.number_input("第三产业占比 (%)", min_value=40.0, max_value=80.0, value=st.session_state.tertiary, step=1.0, key="ter_input")
+        st.number_input("第三产业占比 (%)", key="tertiary", min_value=40.0, max_value=80.0, step=1.0)
 
-# ================== 主界面：两列布局（左侧输入，右侧结果） ==================
+# ================== 主界面：左侧输入，右侧结果 ==================
 col_left, col_right = st.columns([1.2, 1.5], gap="large")
 
 with col_left:
-    # 房屋本体特征卡片
-    with st.container():
-        st.markdown("### 🏷️ 房屋本体属性")
-        area = st.number_input("建筑面积 (㎡)", min_value=30.0, max_value=300.0, value=100.0, step=1.0, help="房屋的建筑面积，单位平方米")
-        age = st.number_input("房龄 (年)", min_value=0, max_value=50, value=5, step=1, help="房屋竣工至今的年限")
-        col_o, col_d, col_e = st.columns(3)
-        with col_o:
-            orientation = st.selectbox("朝向", ["南", "北", "东", "西", "其他"], help="主要房间朝向")
-        with col_d:
-            decoration = st.selectbox("装修程度", ["精装", "简装", "毛坯", "其他", "未知"])
-        with col_e:
-            elevator = st.selectbox("有无电梯", ["有", "无", "未知"])
+    st.markdown("### 🏷️ 房屋本体属性")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.number_input("建筑面积 (㎡)", key="area", min_value=30.0, max_value=300.0, step=1.0)
+    with col2:
+        st.number_input("房龄 (年)", key="age", min_value=0, max_value=50, step=1)
+    with col3:
+        st.selectbox("朝向", ["南", "北", "东", "西", "其他"], key="orientation")
+    col4, col5 = st.columns(2)
+    with col4:
+        st.selectbox("装修程度", ["精装", "简装", "毛坯", "其他", "未知"], key="decoration")
+    with col5:
+        st.selectbox("有无电梯", ["有", "无", "未知"], key="elevator")
     
     st.markdown("---")
-    
-    # 微观区位特征（使用折叠分组）
     with st.expander("🚉 交通设施", expanded=False):
-        dist_subway = st.number_input("距最近地铁站 (米)", min_value=0, max_value=20000, value=1500, step=100)
-        count_subway = st.number_input("10km内地铁站数", min_value=0, max_value=20, value=2, step=1)
-        dist_bus = st.number_input("距最近公交站 (米)", min_value=0, max_value=5000, value=500, step=100)
-        count_bus = st.number_input("10km内公交站数", min_value=0, max_value=100, value=10, step=5)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("距最近地铁站 (米)", key="dist_subway", min_value=0, max_value=20000, step=100)
+        with c2:
+            st.number_input("10km内地铁站数", key="count_subway", min_value=0, max_value=20, step=1)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("距最近公交站 (米)", key="dist_bus", min_value=0, max_value=5000, step=100)
+        with c2:
+            st.number_input("10km内公交站数", key="count_bus", min_value=0, max_value=100, step=5)
     
     with st.expander("📚 教育医疗", expanded=False):
-        dist_school = st.number_input("距最近学校 (米)", min_value=0, max_value=10000, value=1000, step=100)
-        count_school = st.number_input("10km内学校数", min_value=0, max_value=50, value=5, step=1)
-        dist_hospital = st.number_input("距最近综合医院 (米)", min_value=0, max_value=15000, value=2000, step=100)
-        count_hospital = st.number_input("10km内综合医院数", min_value=0, max_value=20, value=2, step=1)
-        dist_clinic = st.number_input("距最近诊所/社区医院 (米)", min_value=0, max_value=5000, value=800, step=100)
-        count_clinic = st.number_input("10km内诊所/社区医院数", min_value=0, max_value=50, value=4, step=1)
-        dist_pharmacy = st.number_input("距最近药店 (米)", min_value=0, max_value=2000, value=300, step=100)
-        count_pharmacy = st.number_input("10km内药店数", min_value=0, max_value=100, value=8, step=1)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("距最近学校 (米)", key="dist_school", min_value=0, max_value=10000, step=100)
+        with c2:
+            st.number_input("10km内学校数", key="count_school", min_value=0, max_value=50, step=1)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("距最近综合医院 (米)", key="dist_hospital", min_value=0, max_value=15000, step=100)
+        with c2:
+            st.number_input("10km内综合医院数", key="count_hospital", min_value=0, max_value=20, step=1)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("距最近诊所/社区医院 (米)", key="dist_clinic", min_value=0, max_value=5000, step=100)
+        with c2:
+            st.number_input("10km内诊所/社区医院数", key="count_clinic", min_value=0, max_value=50, step=1)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("距最近药店 (米)", key="dist_pharmacy", min_value=0, max_value=2000, step=100)
+        with c2:
+            st.number_input("10km内药店数", key="count_pharmacy", min_value=0, max_value=100, step=1)
     
     with st.expander("🛍️ 商业休闲", expanded=False):
-        dist_mall = st.number_input("距最近大型商场 (米)", min_value=0, max_value=10000, value=1500, step=100)
-        count_mall = st.number_input("10km内大型商场数", min_value=0, max_value=20, value=1, step=1)
-        dist_small_business = st.number_input("距最近小型商业 (米)", min_value=0, max_value=3000, value=200, step=100)
-        count_small_business = st.number_input("10km内小型商业数", min_value=0, max_value=200, value=20, step=5)
-        dist_catering = st.number_input("距最近餐饮场所 (米)", min_value=0, max_value=2000, value=100, step=50)
-        count_catering = st.number_input("10km内餐饮数", min_value=0, max_value=300, value=30, step=10)
-        dist_park = st.number_input("距最近公园 (米)", min_value=0, max_value=10000, value=1000, step=100)
-        count_park = st.number_input("10km内公园数", min_value=0, max_value=20, value=2, step=1)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("距最近大型商场 (米)", key="dist_mall", min_value=0, max_value=10000, step=100)
+        with c2:
+            st.number_input("10km内大型商场数", key="count_mall", min_value=0, max_value=20, step=1)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("距最近小型商业 (米)", key="dist_small_business", min_value=0, max_value=3000, step=100)
+        with c2:
+            st.number_input("10km内小型商业数", key="count_small_business", min_value=0, max_value=200, step=5)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("距最近餐饮场所 (米)", key="dist_catering", min_value=0, max_value=2000, step=50)
+        with c2:
+            st.number_input("10km内餐饮数", key="count_catering", min_value=0, max_value=300, step=10)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("距最近公园 (米)", key="dist_park", min_value=0, max_value=10000, step=100)
+        with c2:
+            st.number_input("10km内公园数", key="count_park", min_value=0, max_value=20, step=1)
 
 with col_right:
     st.markdown("## 📈 预测结果")
-    predict_btn = st.button("🔮 开始预测", type="primary", use_container_width=True)
-    
-    # 用于存储预测结果和图表
-    if 'pred_price' not in st.session_state:
-        st.session_state.pred_price = None
-        st.session_state.fig = None
-    
-    if predict_btn:
+    if st.button("🔮 开始预测", type="primary", use_container_width=True):
+        # 收集所有输入
         try:
-            # 编码分类变量
-            ori_encoded = encode_categorical(orientation, encoders['朝向'])
-            dec_encoded = encode_categorical(decoration, encoders['装修'])
-            ele_encoded = encode_categorical(elevator, encoders['有无电梯'])
-            
-            # 构造输入字典
             input_dict = {
-                '建筑面积': area,
-                '房龄': age,
-                '朝向': ori_encoded,
-                '装修': dec_encoded,
-                '有无电梯': ele_encoded,
-                'dist_地铁站': dist_subway,
-                'count_地铁站_within_10000m': count_subway,
-                'dist_公交站': dist_bus,
-                'count_公交站_within_10000m': count_bus,
-                'dist_学校': dist_school,
-                'count_学校_within_10000m': count_school,
-                'dist_综合医院': dist_hospital,
-                'count_综合医院_within_10000m': count_hospital,
-                'dist_诊所/社区医院': dist_clinic,
-                'count_诊所/社区医院_within_10000m': count_clinic,
-                'dist_药店': dist_pharmacy,
-                'count_药店_within_10000m': count_pharmacy,
-                'dist_大型商场': dist_mall,
-                'count_大型商场_within_10000m': count_mall,
-                'dist_小型商业': dist_small_business,
-                'count_小型商业_within_10000m': count_small_business,
-                'dist_餐饮': dist_catering,
-                'count_餐饮_within_10000m': count_catering,
-                'dist_公园': dist_park,
-                'count_公园_within_10000m': count_park,
-                '城镇居民人均可支配收入': income,
-                '人均GDP': gdp,
-                '常住人口': population,
-                '第三产业占比': tertiary
+                '建筑面积': st.session_state.area,
+                '房龄': st.session_state.age,
+                '朝向': encode_categorical(st.session_state.orientation, encoders['朝向']),
+                '装修': encode_categorical(st.session_state.decoration, encoders['装修']),
+                '有无电梯': encode_categorical(st.session_state.elevator, encoders['有无电梯']),
+                'dist_地铁站': st.session_state.dist_subway,
+                'count_地铁站_within_10000m': st.session_state.count_subway,
+                'dist_公交站': st.session_state.dist_bus,
+                'count_公交站_within_10000m': st.session_state.count_bus,
+                'dist_学校': st.session_state.dist_school,
+                'count_学校_within_10000m': st.session_state.count_school,
+                'dist_综合医院': st.session_state.dist_hospital,
+                'count_综合医院_within_10000m': st.session_state.count_hospital,
+                'dist_诊所/社区医院': st.session_state.dist_clinic,
+                'count_诊所/社区医院_within_10000m': st.session_state.count_clinic,
+                'dist_药店': st.session_state.dist_pharmacy,
+                'count_药店_within_10000m': st.session_state.count_pharmacy,
+                'dist_大型商场': st.session_state.dist_mall,
+                'count_大型商场_within_10000m': st.session_state.count_mall,
+                'dist_小型商业': st.session_state.dist_small_business,
+                'count_小型商业_within_10000m': st.session_state.count_small_business,
+                'dist_餐饮': st.session_state.dist_catering,
+                'count_餐饮_within_10000m': st.session_state.count_catering,
+                'dist_公园': st.session_state.dist_park,
+                'count_公园_within_10000m': st.session_state.count_park,
+                '城镇居民人均可支配收入': st.session_state.income,
+                '人均GDP': st.session_state.gdp,
+                '常住人口': st.session_state.population,
+                '第三产业占比': st.session_state.tertiary,
             }
             with st.spinner("模型推理中..."):
                 pred = predict_price(input_dict)
-                st.session_state.pred_price = pred
-                # 生成SHAP图
                 fig = plot_shap_waterfall(input_dict)
-                st.session_state.fig = fig
-                st.success(f"**预测单价：{pred:.0f} 元/平米**")
-                # 简单置信区间（鲁棒性示意）
-                lower = pred - 1.96 * train_rmse
-                upper = pred + 1.96 * train_rmse
-                st.caption(f"95% 置信区间：[{lower:.0f}, {upper:.0f}] 元/平米")
+            st.session_state['pred'] = pred
+            st.session_state['fig'] = fig
         except Exception as e:
-            st.error(f"预测失败：{str(e)}")
+            st.error(f"预测失败: {e}")
     
-    # 显示结果卡片
-    if st.session_state.pred_price is not None:
-        with st.container():
-            st.markdown('<div class="result-card">', unsafe_allow_html=True)
-            st.markdown(f"### 💰 预测单价")
-            st.markdown(f'<span class="metric-value">{st.session_state.pred_price:.0f}</span> <span style="font-size:1.2rem;">元/平米</span>', unsafe_allow_html=True)
-            st.markdown(f"**🔹 基准值**：{y_train_mean:.0f} 元/平米（训练集均价）")
-            st.markdown(f"**📊 预测误差范围**：±{1.96*train_rmse:.0f} 元/平米 (95%置信)")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        # SHAP图展示及下载
-        if st.session_state.fig is not None:
-            st.subheader("🔍 影响因素贡献分解")
-            st.pyplot(st.session_state.fig)
-            # 下载按钮
-            buf = BytesIO()
-            st.session_state.fig.savefig(buf, format="png", dpi=150, bbox_inches='tight')
-            buf.seek(0)
-            st.download_button("📥 下载SHAP图", data=buf, file_name="shap_waterfall.png", mime="image/png")
+    if 'pred' in st.session_state:
+        pred = st.session_state.pred
+        st.markdown(f'<div class="result-card"><span class="metric-value">{pred:.0f}</span> <span style="font-size:1.2rem;">元/平米</span></div>', unsafe_allow_html=True)
+        st.caption(f"训练集均价基准：{y_train_mean:.0f} 元/平米")
+        st.caption(f"模型预测误差 (RMSE)：{train_rmse:.0f} 元/平米，相对误差约 {train_mape_percent:.1f}%")
+        st.subheader("🔍 影响因素贡献分解")
+        st.pyplot(st.session_state.fig)
+        buf = BytesIO()
+        st.session_state.fig.savefig(buf, format="png", dpi=150, bbox_inches='tight')
+        buf.seek(0)
+        st.download_button("📥 下载SHAP图", data=buf, file_name="shap_waterfall.png", mime="image/png")
     else:
-        st.info("👈 请填写左侧房屋特征，然后点击「开始预测」按钮。")
-        # 显示帮助提示
+        st.info("👈 填写左侧特征后点击「开始预测」")
         st.markdown("""
-        <div style="background-color: #eef2f7; padding: 1rem; border-radius: 15px; margin-top: 1rem;">
-        <p>💡 <strong>使用小贴士</strong></p>
-        <ul>
-        <li>宏观指标已预置济南市2023年数据，可在上方展开修改。</li>
-        <li>微观区位特征可按类别逐个填写，或使用侧边栏「填充示例」快速测试。</li>
-        <li>SHAP瀑布图将展示各特征对预测值的正向/负向影响。</li>
-        </ul>
+        <div style="background-color: #eef2f7; padding: 1rem; border-radius: 15px;">
+        <strong>💡 使用提示</strong><br>
+        - 侧边栏可快速填充示例房源或切换城市宏观指标<br>
+        - 宏观指标可展开手动调整<br>
+        - 预测结果附带模型整体误差参考
         </div>
         """, unsafe_allow_html=True)
 
-# ================== 页脚 ==================
 st.markdown("---")
-st.caption("© 2025 房价预测系统 | 模型基于 2021-2024 年山东省济南、烟台、济宁二手房数据训练 | SHAP解释基于测试集近似")
+st.caption("© 2025 房价预测系统 | 基于XGBoost+SHAP | 数据时间:2021-2024 山东省济南/济宁/烟台")
