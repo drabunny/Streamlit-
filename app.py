@@ -4,14 +4,43 @@ import numpy as np
 import joblib
 import shap
 import matplotlib.pyplot as plt
+import matplotlib
 from sklearn.preprocessing import LabelEncoder
+import os
+import requests
+
+# ================== 下载并安装中文字体（解决云环境缺字体） ==================
+def install_chinese_font():
+    """下载文泉驿微米黑字体并设置为matplotlib默认"""
+    font_path = "/tmp/wqy-microhei.ttc"
+    if not os.path.exists(font_path):
+        try:
+            url = "https://github.com/StellarCN/scp_zh/raw/master/fonts/wqy-microhei.ttc"
+            response = requests.get(url, timeout=10)
+            with open(font_path, "wb") as f:
+                f.write(response.content)
+        except:
+            # 若下载失败，尝试备用源
+            try:
+                url2 = "https://raw.githubusercontent.com/StellarCN/scp_zh/master/fonts/wqy-microhei.ttc"
+                response = requests.get(url2, timeout=10)
+                with open(font_path, "wb") as f:
+                    f.write(response.content)
+            except:
+                st.warning("⚠️ 中文字体下载失败，SHAP图可能无法显示中文。")
+                return
+    if os.path.exists(font_path):
+        matplotlib.font_manager.fontManager.addfont(font_path)
+        plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'Microsoft YaHei', 'SimHei']
+        plt.rcParams['axes.unicode_minus'] = False
+
+install_chinese_font()
 
 # ================== 页面配置 ==================
 st.set_page_config(
     page_title="房价预测与影响因素分析系统",
     page_icon="🏠",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
 # ================== 加载模型与预处理对象 ==================
@@ -29,39 +58,6 @@ except FileNotFoundError as e:
     st.error(f"❌ 缺少必要的模型文件：{e}\n请确保 best_xgboost_tuned.pkl, feature_columns.pkl, label_encoders.pkl, y_train_mean.npy 在当前目录下。")
     st.stop()
 
-# ================== 特征名英文化映射（用于SHAP图，避免中文字体缺失）==================
-FEATURE_NAMES_EN = {
-    '建筑面积': 'Area (sqm)',
-    '房龄': 'Building Age (years)',
-    '朝向': 'Orientation',
-    '装修': 'Decoration',
-    '有无电梯': 'Elevator',
-    'dist_地铁站': 'Distance to Subway (m)',
-    'count_地铁站_within_10000m': '# Subway Stations (10km)',
-    'dist_公交站': 'Distance to Bus Stop (m)',
-    'count_公交站_within_10000m': '# Bus Stops (10km)',
-    'dist_学校': 'Distance to School (m)',
-    'count_学校_within_10000m': '# Schools (10km)',
-    'dist_综合医院': 'Distance to General Hospital (m)',
-    'count_综合医院_within_10000m': '# General Hospitals (10km)',
-    'dist_诊所/社区医院': 'Distance to Clinic (m)',
-    'count_诊所/社区医院_within_10000m': '# Clinics (10km)',
-    'dist_药店': 'Distance to Pharmacy (m)',
-    'count_药店_within_10000m': '# Pharmacies (10km)',
-    'dist_大型商场': 'Distance to Mall (m)',
-    'count_大型商场_within_10000m': '# Malls (10km)',
-    'dist_小型商业': 'Distance to Small Business (m)',
-    'count_小型商业_within_10000m': '# Small Businesses (10km)',
-    'dist_餐饮': 'Distance to Restaurant (m)',
-    'count_餐饮_within_10000m': '# Restaurants (10km)',
-    'dist_公园': 'Distance to Park (m)',
-    'count_公园_within_10000m': '# Parks (10km)',
-    '城镇居民人均可支配收入': 'Disposable Income (RMB)',
-    '人均GDP': 'GDP per Capita (RMB)',
-    '常住人口': 'Population (10k)',
-    '第三产业占比': 'Tertiary Industry (%)'
-}
-
 # ================== 辅助函数 ==================
 def encode_categorical(value, encoder):
     try:
@@ -77,25 +73,24 @@ def predict_price(input_dict):
     return model.predict(input_df)[0]
 
 def plot_shap_waterfall(input_dict):
-    """生成SHAP瀑布图，使用英文特征名避免字体问题，返回figure对象"""
+    """生成清晰的SHAP瀑布图，使用中文，返回figure对象"""
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
     
-    # 获取英文特征名列表
-    en_feature_names = [FEATURE_NAMES_EN.get(name, name) for name in FEATURE_COLS]
-    
-    # 创建较大尺寸的图
-    fig = plt.figure(figsize=(12, 6))
+    # 清除当前图形，防止重影
+    plt.clf()
+    # 创建大尺寸图
+    fig = plt.figure(figsize=(12, 6), dpi=100)
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
             base_values=explainer.expected_value,
             data=input_df.iloc[0].values,
-            feature_names=en_feature_names
+            feature_names=FEATURE_COLS
         ),
         show=False,
-        max_display=15  # 显示最多15个特征
+        max_display=15
     )
     plt.tight_layout()
     return fig
@@ -104,18 +99,19 @@ def plot_shap_waterfall(input_dict):
 st.title("🏠 房价预测与影响因素分析系统")
 st.markdown("基于 XGBoost 模型的二手房单价预测，并利用 SHAP 方法解释各特征的影响。")
 
-# ================== 侧边栏：宏观指标 ==================
-st.sidebar.header("📊 宏观经济指标（可选）")
-use_macro = st.sidebar.checkbox("使用自定义宏观指标", value=False, help="默认使用济南市2023年数据")
-if use_macro:
-    income = st.sidebar.number_input("城镇居民人均可支配收入 (元)", min_value=30000, max_value=100000, value=62506, step=1000)
-    gdp = st.sidebar.number_input("人均GDP (元)", min_value=50000, max_value=200000, value=135200, step=5000)
-    population = st.sidebar.number_input("常住人口 (万人)", min_value=500.0, max_value=1200.0, value=943.7, step=10.0)
-    tertiary = st.sidebar.number_input("第三产业占比 (%)", min_value=40.0, max_value=80.0, value=62.8, step=1.0)
-else:
-    income, gdp, population, tertiary = 62506, 135200, 943.7, 62.8
+# ================== 宏观指标（放在主界面顶部，醒目） ==================
+with st.expander("📊 宏观经济指标（可选，默认使用济南市2023年数据）", expanded=False):
+    col_macro1, col_macro2, col_macro3, col_macro4 = st.columns(4)
+    with col_macro1:
+        income = st.number_input("城镇居民人均可支配收入 (元)", min_value=30000, max_value=100000, value=62506, step=1000)
+    with col_macro2:
+        gdp = st.number_input("人均GDP (元)", min_value=50000, max_value=200000, value=135200, step=5000)
+    with col_macro3:
+        population = st.number_input("常住人口 (万人)", min_value=500.0, max_value=1200.0, value=943.7, step=10.0)
+    with col_macro4:
+        tertiary = st.number_input("第三产业占比 (%)", min_value=40.0, max_value=80.0, value=62.8, step=1.0)
 
-# ================== 主界面：三列布局（右侧加宽）==================
+# ================== 主界面：三列布局 ==================
 col_left, col_mid, col_right = st.columns([1, 1.2, 1.5], gap="medium")
 
 with col_left:
@@ -127,26 +123,27 @@ with col_left:
     elevator = st.selectbox("有无电梯", ["有", "无", "未知"])
 
 with col_mid:
-    st.subheader("🚉 微观区位特征（距离：米）")
-    dist_subway = st.number_input("🚇 距最近地铁站", min_value=0, max_value=20000, value=1500, step=100)
+    st.subheader("🚉 微观区位特征")
+    st.caption("距离单位均为米（m）")
+    dist_subway = st.number_input("🚇 距最近地铁站 (米)", min_value=0, max_value=20000, value=1500, step=100)
     count_subway = st.number_input("📌 10km内地铁站数", min_value=0, max_value=20, value=2, step=1)
-    dist_bus = st.number_input("🚌 距最近公交站", min_value=0, max_value=5000, value=500, step=100)
+    dist_bus = st.number_input("🚌 距最近公交站 (米)", min_value=0, max_value=5000, value=500, step=100)
     count_bus = st.number_input("📌 10km内公交站数", min_value=0, max_value=100, value=10, step=5)
-    dist_school = st.number_input("🏫 距最近学校", min_value=0, max_value=10000, value=1000, step=100)
+    dist_school = st.number_input("🏫 距最近学校 (米)", min_value=0, max_value=10000, value=1000, step=100)
     count_school = st.number_input("📌 10km内学校数", min_value=0, max_value=50, value=5, step=1)
-    dist_hospital = st.number_input("🏥 距最近综合医院", min_value=0, max_value=15000, value=2000, step=100)
+    dist_hospital = st.number_input("🏥 距最近综合医院 (米)", min_value=0, max_value=15000, value=2000, step=100)
     count_hospital = st.number_input("📌 10km内综合医院数", min_value=0, max_value=20, value=2, step=1)
-    dist_clinic = st.number_input("💊 距最近诊所/社区医院", min_value=0, max_value=5000, value=800, step=100)
+    dist_clinic = st.number_input("💊 距最近诊所/社区医院 (米)", min_value=0, max_value=5000, value=800, step=100)
     count_clinic = st.number_input("📌 10km内诊所/社区医院数", min_value=0, max_value=50, value=4, step=1)
-    dist_pharmacy = st.number_input("💊 距最近药店", min_value=0, max_value=2000, value=300, step=100)
+    dist_pharmacy = st.number_input("💊 距最近药店 (米)", min_value=0, max_value=2000, value=300, step=100)
     count_pharmacy = st.number_input("📌 10km内药店数", min_value=0, max_value=100, value=8, step=1)
-    dist_mall = st.number_input("🛍️ 距最近大型商场", min_value=0, max_value=10000, value=1500, step=100)
+    dist_mall = st.number_input("🛍️ 距最近大型商场 (米)", min_value=0, max_value=10000, value=1500, step=100)
     count_mall = st.number_input("📌 10km内大型商场数", min_value=0, max_value=20, value=1, step=1)
-    dist_small_business = st.number_input("🏪 距最近小型商业", min_value=0, max_value=3000, value=200, step=100)
+    dist_small_business = st.number_input("🏪 距最近小型商业 (米)", min_value=0, max_value=3000, value=200, step=100)
     count_small_business = st.number_input("📌 10km内小型商业数", min_value=0, max_value=200, value=20, step=5)
-    dist_catering = st.number_input("🍜 距最近餐饮场所", min_value=0, max_value=2000, value=100, step=50)
+    dist_catering = st.number_input("🍜 距最近餐饮场所 (米)", min_value=0, max_value=2000, value=100, step=50)
     count_catering = st.number_input("📌 10km内餐饮数", min_value=0, max_value=300, value=30, step=10)
-    dist_park = st.number_input("🌳 距最近公园", min_value=0, max_value=10000, value=1000, step=100)
+    dist_park = st.number_input("🌳 距最近公园 (米)", min_value=0, max_value=10000, value=1000, step=100)
     count_park = st.number_input("📌 10km内公园数", min_value=0, max_value=20, value=2, step=1)
 
 with col_right:
@@ -204,12 +201,13 @@ with col_right:
             try:
                 fig = plot_shap_waterfall(input_dict)
                 st.pyplot(fig)
-                plt.close(fig)   # 关闭图形释放内存
+                plt.close(fig)
             except Exception as e:
                 st.error(f"生成SHAP图时出错：{str(e)}")
                 st.info("提示：预测功能正常，图表生成可能因环境缺少依赖而失败。")
     else:
         st.info("👈 请填写左侧特征，然后点击「开始预测」按钮。")
-
-st.markdown("---")
-st.caption("注：预测基于 XGBoost 模型（2021-2024年山东省济南/烟台/济宁数据），SHAP瀑布图显示各特征对预测值的影响贡献。宏观指标默认使用济南市2023年数据，可在侧边栏自定义。")
+    
+    # 将说明注释放到结果列下方，而不是整个页面底部
+    st.markdown("---")
+    st.caption("注：预测基于 XGBoost 模型（2021-2024年山东省济南/烟台/济宁数据），SHAP瀑布图显示各特征对预测值的影响贡献。")
