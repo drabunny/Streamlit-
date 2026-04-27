@@ -163,8 +163,10 @@ def plot_shap_waterfall(input_dict):
     shap_values = explainer.shap_values(input_df)
 
     plt.clf()
-    fig = plt.figure(figsize=(14, 8), dpi=150, facecolor="#ffffff")
-    
+    fig = plt.figure(figsize=(16, 8), dpi=180, facecolor="#ffffff")
+    ax = plt.gca()
+    ax.set_facecolor("#ffffff")
+
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
@@ -172,20 +174,24 @@ def plot_shap_waterfall(input_dict):
             data=input_df.iloc[0].values,
             feature_names=FEATURE_COLS
         ),
-        show=False
+        show=False,
+        max_display=18,
     )
 
-    ax = plt.gca()
-    ax.set_facecolor("#ffffff")
-    for idx, text in enumerate(ax.texts):
-        if idx < len(ax.texts) - 1:
-            text.set_visible(False)
+    plt.xticks(fontsize=11)
+    plt.yticks(fontsize=10)
 
-    plt.xticks(fontsize=10)
-    plt.yticks(fontsize=9)
-    plt.subplots_adjust(left=0.35)
+    # 标题清晰说明 不用解释也能看懂
+    plt.title(
+        "房价影响因素贡献分解图\n红色：正向提升房价 ｜ 蓝色：负向拉低房价",
+        fontsize=13, pad=20, weight='bold'
+    )
 
+    ax.grid(axis='x', alpha=0.25, linestyle='--')
+
+    plt.tight_layout(pad=2.5)
     return fig
+
 # ================== 初始化 session_state 默认值 ==================
 if 'init_done' not in st.session_state:
     st.session_state.area = 100.0
