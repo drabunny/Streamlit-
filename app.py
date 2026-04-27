@@ -537,6 +537,6 @@ with col_right:
 # ================== 页脚 ==================
 st.markdown("---")
 st.markdown(
-    "<p style='text-align: center; color: #86909c;'>© 2025 房价预测系统 | XGBoost+SHAP | 数据范围：山东济南/烟台/济宁 2021-2024 | 购房建议由系统自动生成，仅供参考</p>",
+    "<p style='text-align: center; color: #86909c;'>房价预测系统 | XGBoost+SHAP | 数据范围：山东济南/烟台/济宁 2021-2024 | 购房建议由系统自动生成，仅供参考</p>",
     unsafe_allow_html=True
 )
