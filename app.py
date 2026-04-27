@@ -14,15 +14,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# 字体文件路径
 font_path = "simhei.ttf"
-# 注册字体
 fm.fontManager.addfont(font_path)
+zh_font = fm.FontProperties(fname=font_path)
 
-# 设置字体族：优先使用 simhei，若缺少负号则从后备字体中获取
 plt.rcParams['font.sans-serif'] = ['simhei', 'DejaVu Sans', 'Arial', 'sans-serif']
-plt.rcParams['axes.unicode_minus'] = False   # 使用 ASCII 连字符代替 unicode 负号
-
+plt.rcParams['axes.unicode_minus'] = False
 # ================== 加载模型与处理对象 ==================
 @st.cache_resource
 def load_artifacts():
