@@ -154,40 +154,59 @@ def predict_price(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     return model.predict(input_df)[0]
 
-# ================== SHAP瀑布图 ==================
+# ================== 自定义瀑布图（只显示一个房价，无重叠）==================
 def plot_shap_waterfall(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
+    expected_value = explainer.expected_value
+    # 计算最终预测值
+    final_pred = predict_price(input_dict)
 
-    plt.clf()
+    # 提取SHAP值和特征名
+    values = shap_values[0]
+    feature_names = FEATURE_COLS
+    # 按绝对值降序排列
+    order = np.argsort(np.abs(values))[::-1]  # 从大到小
+    values_sorted = values[order]
+    feature_names_sorted = [feature_names[i] for i in order if abs(values[i]) > 1e-6]  # 忽略几乎为0的特征
+    values_sorted = values_sorted[:len(feature_names_sorted)]
 
-    fig = plt.figure(figsize=(16, 8), dpi=180, facecolor="#ffffff")
-    ax = plt.gca()
-    ax.set_facecolor("#ffffff")
+    # 构建累计贡献位置
+    cumulative = np.cumsum(values_sorted)
+    # 计算起始点
+    start = expected_value
+    positions = np.concatenate(([start], start + cumulative[:-1]))
+    ends = start + cumulative
 
-    shap.waterfall_plot(
-        shap.Explanation(
-            values=shap_values[0],
-            base_values=explainer.expected_value,
-            data=input_df.iloc[0].values,
-            feature_names=FEATURE_COLS
-        ),
-        show=False,
-        max_display=18,
-    )
+    # 创建画布
+    fig, ax = plt.subplots(figsize=(12, max(6, len(feature_names_sorted) * 0.4)), facecolor='white')
+    ax.set_facecolor('white')
 
-    plt.xticks(fontsize=11, color="#333333")
-    plt.yticks(fontsize=10, color="#222222")
+    # 绘制每个特征的贡献段（瀑布段）
+    y_pos = np.arange(len(feature_names_sorted))
+    colors = ['#ff7c80' if v > 0 else '#588c7e' for v in values_sorted]
 
-    plt.title(
-        "房价影响因素贡献分解图\n红色：正向提升房价 ｜ 蓝：负向拉低房价",
-        fontsize=13, pad=20, color="#1f2937", weight='bold'
-    )
+    for i, (v, start_x, end_x) in enumerate(zip(values_sorted, positions, ends)):
+        # 绘制水平线段
+        ax.hlines(y=i, xmin=start_x, xmax=end_x, color=colors[i], linewidth=6, alpha=0.8)
+        # 标记数值
+        ax.text(end_x, i, f'{v:+.0f}', va='center', ha='left' if v > 0 else 'right', fontsize=9, color='#333')
+        # 在起点添加竖线（可选）
+        if i == 0:
+            ax.vlines(x=start_x, ymin=i-0.4, ymax=i+0.4, linestyle='--', color='gray', linewidth=1)
 
-    ax.grid(axis='x', alpha=0.25, linestyle='--')
+    # 设置Y轴标签
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(feature_names_sorted, fontsize=10)
+    ax.set_ylim(-0.5, len(feature_names_sorted) - 0.5)
+    ax.set_xlabel('房价贡献 (元/平米)', fontsize=11)
+    ax.set_title(f'房价影响因素瀑布图\n最终预测值: {final_pred:.0f} 元/平米', fontsize=12, pad=15)
+    ax.grid(axis='x', alpha=0.3, linestyle='--')
+    ax.axvline(x=expected_value, color='gray', linestyle='-', linewidth=1, alpha=0.5)
+    ax.text(expected_value, -0.7, f'基准值: {expected_value:.0f}', ha='center', fontsize=8, color='gray')
 
-    plt.tight_layout(pad=2.5)
+    plt.tight_layout()
     return fig
 
 # ================== 初始化 session_state 默认值 ==================
