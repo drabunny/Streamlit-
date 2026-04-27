@@ -16,34 +16,87 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ================== 自定义CSS样式 ==================
+# ================== 自定义CSS样式（优化美化版） ==================
 st.markdown("""
 <style>
+    /* 全局样式 */
+    .main {
+        background-color: #f8fafc;
+    }
+    
+    /* 按钮样式 */
     .stButton > button {
         background: linear-gradient(90deg, #0066cc, #0099ff);
         color: white;
         border: none;
-        border-radius: 25px;
-        padding: 0.5rem 1rem;
+        border-radius: 12px;
+        padding: 0.75rem 1.5rem;
         font-weight: bold;
-        transition: all 0.3s;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        width: 100%;
     }
     .stButton > button:hover {
         background: linear-gradient(90deg, #0055aa, #0088ee);
-        box-shadow: 0 4px 12px rgba(0,102,204,0.3);
+        box-shadow: 0 6px 16px rgba(0,102,204,0.25);
+        transform: translateY(-2px);
     }
+    
+    /* 结果卡片样式 */
     .result-card {
         background-color: white;
-        border-radius: 20px;
-        padding: 1.5rem;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.06);
         margin-bottom: 1.5rem;
-        border-left: 5px solid #0066cc;
+        border-left: 6px solid #0066cc;
+        text-align: center;
     }
     .metric-value {
-        font-size: 2.5rem;
-        font-weight: bold;
+        font-size: 3rem;
+        font-weight: 800;
         color: #0066cc;
+        line-height: 1.2;
+    }
+    .metric-unit {
+        font-size: 1.25rem;
+        color: #475569;
+        font-weight: 500;
+    }
+    
+    /* 标题样式优化 */
+    .section-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e2e8f0;
+    }
+    
+    /* 面板样式 */
+    .stExpander {
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        margin-bottom: 1rem;
+    }
+    .stExpander > div > div:first-child {
+        border-radius: 12px;
+        background-color: white;
+    }
+    
+    /* 输入框样式 */
+    .stNumberInput, .stSelectbox {
+        margin-bottom: 0.75rem;
+    }
+    
+    /* 提示卡片 */
+    .info-card {
+        background-color: #f1f5f9;
+        padding: 1.25rem;
+        border-radius: 12px;
+        border-left: 4px solid #0099ff;
+        margin-top: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -100,7 +153,7 @@ def plot_shap_waterfall(input_dict):
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
     plt.clf()
-    fig = plt.figure(figsize=(12, 5), dpi=100)
+    fig = plt.figure(figsize=(12, 6), dpi=120)
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
@@ -113,35 +166,6 @@ def plot_shap_waterfall(input_dict):
     )
     plt.tight_layout()
     return fig
-
-def get_sample_input():
-    return {
-        'area': 95.0,
-        'age': 8,
-        'orientation': '南',
-        'decoration': '精装',
-        'elevator': '有',
-        'dist_subway': 800,
-        'count_subway': 3,
-        'dist_bus': 200,
-        'count_bus': 15,
-        'dist_school': 500,
-        'count_school': 6,
-        'dist_hospital': 1200,
-        'count_hospital': 2,
-        'dist_clinic': 400,
-        'count_clinic': 5,
-        'dist_pharmacy': 150,
-        'count_pharmacy': 10,
-        'dist_mall': 2000,
-        'count_mall': 1,
-        'dist_small_business': 100,
-        'count_small_business': 30,
-        'dist_catering': 50,
-        'count_catering': 50,
-        'dist_park': 600,
-        'count_park': 2
-    }
 
 # ================== 初始化 session_state 默认值 ==================
 if 'init_done' not in st.session_state:
@@ -180,30 +204,12 @@ if 'init_done' not in st.session_state:
     st.session_state.tertiary = default_macro['tertiary']
     st.session_state.init_done = True
 
-# ================== 侧边栏快速操作 ==================
-with st.sidebar:
-    st.header("⚙️ 快速测试")
-    if st.button("📋 填充示例房源"):
-        sample = get_sample_input()
-        for key, value in sample.items():
-            if key in st.session_state:
-                st.session_state[key] = value
-        st.success("示例已加载！请点击「开始预测」")
-        st.rerun()
-    
-    st.markdown("---")
-    selected_city = st.selectbox("城市（自动更新宏观指标）", list(CITY_MACRO.keys()))
-    if st.button("📊 应用该城市宏观指标"):
-        macro = CITY_MACRO[selected_city]
-        st.session_state.income = macro['income']
-        st.session_state.gdp = macro['gdp']
-        st.session_state.population = macro['population']
-        st.session_state.tertiary = macro['tertiary']
-        st.success(f"已应用{selected_city}的宏观数据")
-        st.rerun()
+# ================== 页面标题 ==================
+st.markdown("<h1 style='text-align: center; color: #1e293b; margin-bottom: 2rem;'>🏠 房价预测与影响因素分析系统</h1>", unsafe_allow_html=True)
 
-# ================== 宏观指标（可编辑） ==================
-with st.expander("📊 宏观经济指标（可手动调整）", expanded=False):
+# ================== 宏观指标模块（优化布局） ==================
+st.markdown("<div class='section-title'>📊 城市宏观经济指标</div>", unsafe_allow_html=True)
+with st.container():
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
     with col_m1:
         st.number_input("城镇居民人均可支配收入 (元)", key="income", min_value=30000, max_value=100000, step=1000)
@@ -214,84 +220,92 @@ with st.expander("📊 宏观经济指标（可手动调整）", expanded=False)
     with col_m4:
         st.number_input("第三产业占比 (%)", key="tertiary", min_value=40.0, max_value=80.0, step=1.0)
 
+st.divider()
+
 # ================== 主界面：左侧输入，右侧结果 ==================
-col_left, col_right = st.columns([1.2, 1.5], gap="large")
+col_left, col_right = st.columns([1, 1.2], gap="large")
 
 with col_left:
-    st.markdown("### 🏷️ 房屋本体属性")
+    st.markdown("<div class='section-title'>🏷️ 房屋基础信息</div>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     with col1:
         st.number_input("建筑面积 (㎡)", key="area", min_value=30.0, max_value=300.0, step=1.0)
     with col2:
         st.number_input("房龄 (年)", key="age", min_value=0, max_value=50, step=1)
     with col3:
-        st.selectbox("朝向", ["南", "北", "东", "西", "其他"], key="orientation")
+        st.selectbox("房屋朝向", ["南", "北", "东", "西", "其他"], key="orientation")
+    
     col4, col5 = st.columns(2)
     with col4:
         st.selectbox("装修程度", ["精装", "简装", "毛坯", "其他", "未知"], key="decoration")
     with col5:
-        st.selectbox("有无电梯", ["有", "无", "未知"], key="elevator")
+        st.selectbox("电梯配置", ["有", "无", "未知"], key="elevator")
     
-    st.markdown("---")
-    with st.expander("🚉 交通设施", expanded=False):
+    st.markdown("<div class='section-title' style='margin-top: 1.5rem;'>🚏 周边配套设施</div>", unsafe_allow_html=True)
+    
+    with st.expander("🚇 交通设施", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
             st.number_input("距最近地铁站 (米)", key="dist_subway", min_value=0, max_value=20000, step=100)
         with c2:
-            st.number_input("10km内地铁站数", key="count_subway", min_value=0, max_value=20, step=1)
+            st.number_input("10km内地铁站数量", key="count_subway", min_value=0, max_value=20, step=1)
         c1, c2 = st.columns(2)
         with c1:
             st.number_input("距最近公交站 (米)", key="dist_bus", min_value=0, max_value=5000, step=100)
         with c2:
-            st.number_input("10km内公交站数", key="count_bus", min_value=0, max_value=100, step=5)
+            st.number_input("10km内公交站数量", key="count_bus", min_value=0, max_value=100, step=5)
     
-    with st.expander("📚 教育医疗", expanded=False):
+    with st.expander("🏥 教育医疗"):
         c1, c2 = st.columns(2)
         with c1:
             st.number_input("距最近学校 (米)", key="dist_school", min_value=0, max_value=10000, step=100)
         with c2:
-            st.number_input("10km内学校数", key="count_school", min_value=0, max_value=50, step=1)
+            st.number_input("10km内学校数量", key="count_school", min_value=0, max_value=50, step=1)
         c1, c2 = st.columns(2)
         with c1:
             st.number_input("距最近综合医院 (米)", key="dist_hospital", min_value=0, max_value=15000, step=100)
         with c2:
-            st.number_input("10km内综合医院数", key="count_hospital", min_value=0, max_value=20, step=1)
+            st.number_input("10km内综合医院数量", key="count_hospital", min_value=0, max_value=20, step=1)
         c1, c2 = st.columns(2)
         with c1:
-            st.number_input("距最近诊所/社区医院 (米)", key="dist_clinic", min_value=0, max_value=5000, step=100)
+            st.number_input("距最近诊所 (米)", key="dist_clinic", min_value=0, max_value=5000, step=100)
         with c2:
-            st.number_input("10km内诊所/社区医院数", key="count_clinic", min_value=0, max_value=50, step=1)
+            st.number_input("10km内诊所数量", key="count_clinic", min_value=0, max_value=50, step=1)
         c1, c2 = st.columns(2)
         with c1:
             st.number_input("距最近药店 (米)", key="dist_pharmacy", min_value=0, max_value=2000, step=100)
         with c2:
-            st.number_input("10km内药店数", key="count_pharmacy", min_value=0, max_value=100, step=1)
+            st.number_input("10km内药店数量", key="count_pharmacy", min_value=0, max_value=100, step=1)
     
-    with st.expander("🛍️ 商业休闲", expanded=False):
+    with st.expander("🛍️ 商业休闲"):
         c1, c2 = st.columns(2)
         with c1:
             st.number_input("距最近大型商场 (米)", key="dist_mall", min_value=0, max_value=10000, step=100)
         with c2:
-            st.number_input("10km内大型商场数", key="count_mall", min_value=0, max_value=20, step=1)
+            st.number_input("10km内大型商场数量", key="count_mall", min_value=0, max_value=20, step=1)
         c1, c2 = st.columns(2)
         with c1:
             st.number_input("距最近小型商业 (米)", key="dist_small_business", min_value=0, max_value=3000, step=100)
         with c2:
-            st.number_input("10km内小型商业数", key="count_small_business", min_value=0, max_value=200, step=5)
+            st.number_input("10km内小型商业数量", key="count_small_business", min_value=0, max_value=200, step=5)
         c1, c2 = st.columns(2)
         with c1:
             st.number_input("距最近餐饮场所 (米)", key="dist_catering", min_value=0, max_value=2000, step=50)
         with c2:
-            st.number_input("10km内餐饮数", key="count_catering", min_value=0, max_value=300, step=10)
+            st.number_input("10km内餐饮数量", key="count_catering", min_value=0, max_value=300, step=10)
         c1, c2 = st.columns(2)
         with c1:
             st.number_input("距最近公园 (米)", key="dist_park", min_value=0, max_value=10000, step=100)
         with c2:
-            st.number_input("10km内公园数", key="count_park", min_value=0, max_value=20, step=1)
+            st.number_input("10km内公园数量", key="count_park", min_value=0, max_value=20, step=1)
 
 with col_right:
-    st.markdown("## 📈 预测结果")
-    if st.button("🔮 开始预测", type="primary", use_container_width=True):
+    st.markdown("<div class='section-title'>📈 房价预测结果</div>", unsafe_allow_html=True)
+    
+    # 预测按钮
+    predict_btn = st.button("🔮 开始预测房价", type="primary", use_container_width=True)
+    
+    if predict_btn:
         try:
             input_dict = {
                 '建筑面积': st.session_state.area,
@@ -324,35 +338,59 @@ with col_right:
                 '常住人口': st.session_state.population,
                 '第三产业占比': st.session_state.tertiary,
             }
-            with st.spinner("模型推理中..."):
+            with st.spinner("模型正在计算预测..."):
                 pred = predict_price(input_dict)
                 fig = plot_shap_waterfall(input_dict)
             st.session_state['pred'] = pred
             st.session_state['fig'] = fig
         except Exception as e:
-            st.error(f"预测失败: {e}")
+            st.error(f"预测失败: {str(e)}")
     
+    # 显示预测结果
     if 'pred' in st.session_state:
         pred = st.session_state.pred
-        st.markdown(f'<div class="result-card"><span class="metric-value">{pred:.0f}</span> <span style="font-size:1.2rem;">元/平米</span></div>', unsafe_allow_html=True)
-        st.caption(f"训练集均价基准：{y_train_mean:.0f} 元/平米")
-        st.caption(f"模型预测误差 (RMSE)：{train_rmse:.0f} 元/平米，相对误差约 {train_mape_percent:.1f}%")
-        st.subheader("🔍 影响因素贡献分解")
+        
+        # 预测价格展示
+        st.markdown(f'''
+        <div class="result-card">
+            <div class="metric-value">{pred:.0f}</div>
+            <div class="metric-unit">元/平方米</div>
+        </div>
+        ''', unsafe_allow_html=True)
+        
+        # 模型信息
+        with st.container():
+            st.caption(f"📊 训练集基准均价：{y_train_mean:.0f} 元/平米")
+            st.caption(f"⚙️ 模型预测误差：{train_rmse:.0f} 元/平米 | 相对误差：{train_mape_percent:.1f}%")
+        
+        # SHAP分析结果
+        st.markdown("<div class='section-title' style='margin-top: 1.5rem;'>🔍 价格影响因素分析</div>", unsafe_allow_html=True)
         st.pyplot(st.session_state.fig)
+        
+        # 下载功能
         buf = BytesIO()
         st.session_state.fig.savefig(buf, format="png", dpi=150, bbox_inches='tight')
         buf.seek(0)
-        st.download_button("📥 下载SHAP图", data=buf, file_name="shap_waterfall.png", mime="image/png")
+        st.download_button(
+            label="📥 下载因素分析图",
+            data=buf,
+            file_name="房价影响因素分析.png",
+            mime="image/png",
+            use_container_width=True
+        )
     else:
-        st.info("👈 填写左侧特征后点击「开始预测」")
         st.markdown("""
-        <div style="background-color: #eef2f7; padding: 1rem; border-radius: 15px;">
-        <strong>💡 使用提示</strong><br>
-        - 侧边栏可快速填充示例房源或切换城市宏观指标<br>
-        - 宏观指标可展开手动调整<br>
-        - 预测结果附带模型整体误差参考
+        <div class="info-card">
+            <h4 style='margin-top:0; color:#0066cc;'>💡 使用指南</h4>
+            <p style='margin-bottom:0; line-height:1.6;'>
+            1. 填写上方的房屋基础信息<br>
+            2. 完善周边配套设施参数<br>
+            3. 点击「开始预测房价」按钮获取结果<br>
+            4. 查看影响房价的关键因素分析
+            </p>
         </div>
         """, unsafe_allow_html=True)
 
+# ================== 页脚 ==================
 st.markdown("---")
-st.caption("© 2025 房价预测系统 | 基于XGBoost+SHAP | 数据时间:2021-2024 山东省济南/济宁/烟台")
+st.markdown("<p style='text-align: center; color: #64748b;'>© 2025 房价预测系统 | 基于XGBoost+SHAP | 数据来源：2021-2024 山东省济南/济宁/烟台</p>", unsafe_allow_html=True)
