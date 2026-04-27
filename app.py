@@ -4,6 +4,7 @@ import numpy as np
 import joblib
 import shap
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 from sklearn.preprocessing import LabelEncoder
 
 # ================== 页面配置 ==================
@@ -13,7 +14,14 @@ st.set_page_config(
     layout="wide"
 )
 
-# ================== 加载模型与预处理对象 ==================
+font_path = "simhei.ttf"
+# 注册字体
+fm.fontManager.addfont(font_path)
+# 设置中文字体
+plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name()
+plt.rcParams['axes.unicode_minus'] = False
+
+# ================== 加载模型与处理对象 ==================
 @st.cache_resource
 def load_artifacts():
     model = joblib.load("best_xgboost_tuned.pkl")
@@ -27,40 +35,6 @@ try:
 except FileNotFoundError as e:
     st.error(f"❌ 缺少必要的模型文件：{e}\n请确保 best_xgboost_tuned.pkl, feature_columns.pkl, label_encoders.pkl, y_train_mean.npy 在当前目录下。")
     st.stop()
-
-# ================== 特征名英文化（用于 SHAP 图，避免中文字体问题）==================
-FEATURE_NAMES_EN = {
-    '建筑面积': 'Area(sqm)',
-    '房龄': 'Age',
-    '朝向': 'Orient.',
-    '装修': 'Decoration',
-    '有无电梯': 'Elevator',
-    'dist_地铁站': 'Dist_subway',
-    'count_地铁站_within_10000m': 'N_subway',
-    'dist_公交站': 'Dist_bus',
-    'count_公交站_within_10000m': 'N_bus',
-    'dist_学校': 'Dist_school',
-    'count_学校_within_10000m': 'N_school',
-    'dist_综合医院': 'Dist_hospital',
-    'count_综合医院_within_10000m': 'N_hospital',
-    'dist_诊所/社区医院': 'Dist_clinic',
-    'count_诊所/社区医院_within_10000m': 'N_clinic',
-    'dist_药店': 'Dist_pharmacy',
-    'count_药店_within_10000m': 'N_pharmacy',
-    'dist_大型商场': 'Dist_mall',
-    'count_大型商场_within_10000m': 'N_mall',
-    'dist_小型商业': 'Dist_smallBiz',
-    'count_小型商业_within_10000m': 'N_smallBiz',
-    'dist_餐饮': 'Dist_catering',
-    'count_餐饮_within_10000m': 'N_catering',
-    'dist_公园': 'Dist_park',
-    'count_公园_within_10000m': 'N_park',
-    '城镇居民人均可支配收入': 'Income',
-    '人均GDP': 'GDP_percap',
-    '常住人口': 'Population',
-    '第三产业占比': 'Tertiary'
-}
-FEATURE_NAMES_EN_LIST = [FEATURE_NAMES_EN.get(name, name) for name in FEATURE_COLS]
 
 # ================== 辅助函数 ==================
 def encode_categorical(value, encoder):
@@ -77,7 +51,7 @@ def predict_price(input_dict):
     return model.predict(input_df)[0]
 
 def plot_shap_waterfall(input_dict):
-    """生成 SHAP 瀑布图，使用英文特征名，返回 figure 对象"""
+    """生成 SHAP 瀑布图，返回 figure 对象"""
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
@@ -89,7 +63,7 @@ def plot_shap_waterfall(input_dict):
             values=shap_values[0],
             base_values=explainer.expected_value,
             data=input_df.iloc[0].values,
-            feature_names=FEATURE_NAMES_EN_LIST
+            feature_names=FEATURE_COLS  # 此处返回的是中文列表，图表将显示中文
         ),
         show=False,
         max_display=15
@@ -101,7 +75,7 @@ def plot_shap_waterfall(input_dict):
 st.title("🏠 房价预测与影响因素分析系统")
 st.markdown("基于 XGBoost 模型的二手房单价预测，并利用 SHAP 方法解释各特征的影响。")
 
-# ================== 宏观指标（放在主界面顶部，醒目） ==================
+# ================== 宏观经济指标（可选） ==================
 with st.expander("📊 宏观经济指标（可选，默认使用济南市2023年数据）", expanded=False):
     col_macro1, col_macro2, col_macro3, col_macro4 = st.columns(4)
     with col_macro1:
