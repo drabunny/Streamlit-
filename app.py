@@ -16,87 +16,105 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ================== 自定义CSS样式（美化版） ==================
+# ================== 全局CSS ==================
 st.markdown("""
 <style>
-    /* 全局样式 */
-    .main {
-        background-color: #f8fafc;
+    /* 全局渐变背景 */
+    .stApp {
+        background: linear-gradient(135deg, #f0f4f8 0%, #e8f4fc 50%, #f5f9ff 100%);
+        background-attachment: fixed;
     }
-    
-    /* 按钮样式 */
+
+    /* 主内容容器磨砂质感 */
+    .main > div {
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(10px);
+        border-radius: 24px;
+        padding: 2rem;
+        margin: 0.5rem;
+    }
+
+    /* 按钮高级样式 */
     .stButton > button {
-        background: linear-gradient(90deg, #0066cc, #0099ff);
+        background: linear-gradient(135deg, #1677ff 0%, #40a9ff 100%);
         color: white;
         border: none;
-        border-radius: 12px;
-        padding: 0.75rem 1.5rem;
-        font-weight: bold;
-        font-size: 1rem;
+        border-radius: 14px;
+        padding: 0.8rem 1.5rem;
+        font-weight: 600;
+        font-size: 1.05rem;
         transition: all 0.3s ease;
-        width: 100%;
+        box-shadow: 0 4px 12px rgba(22, 119, 255, 0.2);
     }
     .stButton > button:hover {
-        background: linear-gradient(90deg, #0055aa, #0088ee);
-        box-shadow: 0 6px 16px rgba(0,102,204,0.25);
-        transform: translateY(-2px);
+        background: linear-gradient(135deg, #0958d9 0%, #1677ff 100%);
+        box-shadow: 0 6px 20px rgba(22, 119, 255, 0.3);
+        transform: translateY(-3px);
     }
-    
-    /* 结果卡片样式 */
+
+    /* 结果卡片 */
     .result-card {
-        background-color: white;
-        border-radius: 16px;
-        padding: 2rem;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.06);
-        margin-bottom: 1.5rem;
-        border-left: 6px solid #0066cc;
+        background: linear-gradient(135deg, #ffffff 0%, #f7fbff 100%);
+        border-radius: 20px;
+        padding: 2.5rem;
+        box-shadow: 0 10px 30px rgba(22, 119, 255, 0.12);
+        margin-bottom: 2rem;
+        border-left: 8px solid #1677ff;
         text-align: center;
     }
     .metric-value {
-        font-size: 3rem;
-        font-weight: 800;
-        color: #0066cc;
-        line-height: 1.2;
+        font-size: 3.2rem;
+        font-weight: 900;
+        color: #1677ff;
+        line-height: 1.1;
     }
     .metric-unit {
-        font-size: 1.25rem;
-        color: #475569;
+        font-size: 1.3rem;
+        color: #607489;
         font-weight: 500;
     }
-    
-    /* 标题样式优化 */
+
+    /* 分区标题 */
     .section-title {
-        font-size: 1.25rem;
+        font-size: 1.3rem;
         font-weight: 700;
-        color: #1e293b;
-        margin-bottom: 1rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 2px solid #e2e8f0;
+        color: #1f2937;
+        margin: 1.2rem 0 1rem 0;
+        padding-bottom: 0.6rem;
+        border-bottom: 3px solid #e6f4ff;
+        display: flex;
+        align-items: center;
     }
-    
-    /* 面板样式 */
+
+    /* 折叠面板美化 */
     .stExpander {
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        margin-bottom: 1rem;
+        border-radius: 16px !important;
+        box-shadow: 0 3px 15px rgba(0,0,0,0.06);
+        margin-bottom: 1.2rem;
+        overflow: hidden;
     }
     .stExpander > div > div:first-child {
-        border-radius: 12px;
-        background-color: white;
+        background: #ffffff !important;
     }
-    
-    /* 输入框样式 */
+
+    /* 输入控件间距 */
     .stNumberInput, .stSelectbox {
-        margin-bottom: 0.75rem;
+        margin-bottom: 0.85rem;
     }
-    
-    /* 提示卡片 */
+
+    /* 提示信息卡片 */
     .info-card {
-        background-color: #f1f5f9;
-        padding: 1.25rem;
-        border-radius: 12px;
-        border-left: 4px solid #0099ff;
-        margin-top: 1rem;
+        background: linear-gradient(135deg, #f6faff 0%, #ecf7ff 100%);
+        padding: 1.5rem;
+        border-radius: 16px;
+        border-left: 5px solid #40a9ff;
+        margin-top: 1.5rem;
+    }
+
+    /* 分割线 */
+    hr {
+        border-color: #cce4fb;
+        margin: 1.8rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -118,15 +136,10 @@ except FileNotFoundError as e:
     st.error(f"❌ 缺少必要的模型文件：{e}")
     st.stop()
 
-# ================== 中文字体配置 ==================
-font_path = "wqy-microhei.ttf"
-try:
-    fm.fontManager.addfont(font_path)
-    plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name()
-    plt.rcParams['axes.unicode_minus'] = False
-except:
-    plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
-    plt.rcParams['axes.unicode_minus'] = False
+# ================== 中文字体全局稳定配置 ==================
+plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'SimHei', 'Microsoft YaHei']
+plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams['font.family'] = 'sans-serif'
 
 # ================== 城市宏观数据预设 ==================
 CITY_MACRO = {
@@ -149,17 +162,19 @@ def predict_price(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     return model.predict(input_df)[0]
 
-# ========== 【重点优化】SHAP瀑布图 更直观、配色分明、字体加大 ==========
+# ================== SHAP瀑布图 ==================
 def plot_shap_waterfall(input_dict):
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
-    
+
     plt.clf()
-    # 加大画布，宽屏展示
-    fig = plt.figure(figsize=(14, 7), dpi=150)
-    
-    # 自定义配色：红色=正向抬价，蓝色=负向降价
+
+    fig = plt.figure(figsize=(16, 8), dpi=180, facecolor="#ffffff")
+    ax = plt.gca()
+    ax.set_facecolor("#ffffff")
+
+    # 自定义配色：红=涨价贡献，青绿=降价贡献
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
@@ -168,26 +183,29 @@ def plot_shap_waterfall(input_dict):
             feature_names=FEATURE_COLS
         ),
         show=False,
-        max_display=15,   # 多展示关键因子
-        # 配色强化区分
+        max_display=18,
     )
 
-    # 全局字体放大
-    plt.xticks(fontsize=10)
-    plt.yticks(fontsize=10)
-    plt.title("房价关键影响因素分解 | 红色=提升房价  蓝色=拉低房价", fontsize=12, pad=15, color="#2c3e50")
-    plt.tight_layout(pad=2.0)
+    plt.xticks(fontsize=11, color="#333333")
+    plt.yticks(fontsize=10, color="#222222")
+
+    plt.title(
+        "房价影响因素贡献分解图\n🔴 红色：正向提升房价 ｜ 🟢 青绿色：负向拉低房价",
+        fontsize=13, pad=20, color="#1f2937", weight='bold'
+    )
+
+    ax.grid(axis='x', alpha=0.25, linestyle='--')
+
+    plt.tight_layout(pad=2.5)
     return fig
 
 # ================== 初始化 session_state 默认值 ==================
 if 'init_done' not in st.session_state:
-    # 房屋本体
     st.session_state.area = 100.0
     st.session_state.age = 5
     st.session_state.orientation = '南'
     st.session_state.decoration = '精装'
     st.session_state.elevator = '有'
-    # 微观区位
     st.session_state.dist_subway = 1500
     st.session_state.count_subway = 2
     st.session_state.dist_bus = 500
@@ -208,7 +226,6 @@ if 'init_done' not in st.session_state:
     st.session_state.count_catering = 30
     st.session_state.dist_park = 1000
     st.session_state.count_park = 2
-    # 宏观
     default_macro = CITY_MACRO['济南市']
     st.session_state.income = default_macro['income']
     st.session_state.gdp = default_macro['gdp']
@@ -216,25 +233,27 @@ if 'init_done' not in st.session_state:
     st.session_state.tertiary = default_macro['tertiary']
     st.session_state.init_done = True
 
-# ================== 页面标题 ==================
-st.markdown("<h1 style='text-align: center; color: #1e293b; margin-bottom: 2rem;'>🏠 房价预测与影响因素分析系统</h1>", unsafe_allow_html=True)
+# ================== 页面主标题 ==================
+st.markdown(
+    "<h1 style='text-align: center; color: #1677ff; margin-bottom: 2.5rem; font-weight: 800;'>🏠 房价预测与影响因素分析系统</h1>",
+    unsafe_allow_html=True
+)
 
-# ================== 宏观指标模块 ==================
+# ================== 宏观经济指标 ==================
 st.markdown("<div class='section-title'>📊 城市宏观经济指标</div>", unsafe_allow_html=True)
-with st.container():
-    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-    with col_m1:
-        st.number_input("城镇居民人均可支配收入 (元)", key="income", min_value=30000, max_value=100000, step=1000)
-    with col_m2:
-        st.number_input("人均GDP (元)", key="gdp", min_value=50000, max_value=200000, step=5000)
-    with col_m3:
-        st.number_input("常住人口 (万人)", key="population", min_value=500.0, max_value=1200.0, step=10.0)
-    with col_m4:
-        st.number_input("第三产业占比 (%)", key="tertiary", min_value=40.0, max_value=80.0, step=1.0)
+col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+with col_m1:
+    st.number_input("城镇居民人均可支配收入 (元)", key="income", min_value=30000, max_value=100000, step=1000)
+with col_m2:
+    st.number_input("人均GDP (元)", key="gdp", min_value=50000, max_value=200000, step=5000)
+with col_m3:
+    st.number_input("常住人口 (万人)", key="population", min_value=500.0, max_value=1200.0, step=10.0)
+with col_m4:
+    st.number_input("第三产业占比 (%)", key="tertiary", min_value=40.0, max_value=80.0, step=1.0)
 
 st.divider()
 
-# ================== 主界面：左侧输入，右侧结果 ==================
+# ================== 左右主布局 ==================
 col_left, col_right = st.columns([1, 1.2], gap="large")
 
 with col_left:
@@ -246,15 +265,15 @@ with col_left:
         st.number_input("房龄 (年)", key="age", min_value=0, max_value=50, step=1)
     with col3:
         st.selectbox("房屋朝向", ["南", "北", "东", "西", "其他"], key="orientation")
-    
+
     col4, col5 = st.columns(2)
     with col4:
         st.selectbox("装修程度", ["精装", "简装", "毛坯", "其他", "未知"], key="decoration")
     with col5:
         st.selectbox("电梯配置", ["有", "无", "未知"], key="elevator")
-    
-    st.markdown("<div class='section-title' style='margin-top: 1.5rem;'>🚏 周边配套设施</div>", unsafe_allow_html=True)
-    
+
+    st.markdown("<div class='section-title'>🚏 周边配套设施</div>", unsafe_allow_html=True)
+
     with st.expander("🚇 交通设施", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
@@ -266,7 +285,7 @@ with col_left:
             st.number_input("距最近公交站 (米)", key="dist_bus", min_value=0, max_value=5000, step=100)
         with c2:
             st.number_input("10km内公交站数量", key="count_bus", min_value=0, max_value=100, step=5)
-    
+
     with st.expander("🏥 教育医疗"):
         c1, c2 = st.columns(2)
         with c1:
@@ -288,7 +307,7 @@ with col_left:
             st.number_input("距最近药店 (米)", key="dist_pharmacy", min_value=0, max_value=2000, step=100)
         with c2:
             st.number_input("10km内药店数量", key="count_pharmacy", min_value=0, max_value=100, step=1)
-    
+
     with st.expander("🛍️ 商业休闲"):
         c1, c2 = st.columns(2)
         with c1:
@@ -313,10 +332,8 @@ with col_left:
 
 with col_right:
     st.markdown("<div class='section-title'>📈 房价预测结果</div>", unsafe_allow_html=True)
-    
-    # 预测按钮
     predict_btn = st.button("🔮 开始预测房价", type="primary", use_container_width=True)
-    
+
     if predict_btn:
         try:
             input_dict = {
@@ -350,59 +367,54 @@ with col_right:
                 '常住人口': st.session_state.population,
                 '第三产业占比': st.session_state.tertiary,
             }
-            with st.spinner("模型正在计算预测..."):
+            with st.spinner("模型计算中，请稍候..."):
                 pred = predict_price(input_dict)
                 fig = plot_shap_waterfall(input_dict)
             st.session_state['pred'] = pred
             st.session_state['fig'] = fig
         except Exception as e:
             st.error(f"预测失败: {str(e)}")
-    
-    # 显示预测结果
+
     if 'pred' in st.session_state:
         pred = st.session_state.pred
-        
-        # 预测价格展示
         st.markdown(f'''
         <div class="result-card">
             <div class="metric-value">{pred:.0f}</div>
             <div class="metric-unit">元/平方米</div>
         </div>
         ''', unsafe_allow_html=True)
-        
-        # 模型信息
-        with st.container():
-            st.caption(f"📊 训练集基准均价：{y_train_mean:.0f} 元/平米")
-            st.caption(f"⚙️ 模型预测误差：{train_rmse:.0f} 元/平米 | 相对误差：{train_mape_percent:.1f}%")
-        
-        # SHAP分析结果
-        st.markdown("<div class='section-title' style='margin-top: 1.5rem;'>🔍 价格影响因素分析</div>", unsafe_allow_html=True)
+
+        st.caption(f"📊 训练集基准均价：{y_train_mean:.0f} 元/平米")
+        st.caption(f"⚙️ 模型误差 RMSE：{train_rmse:.0f} ｜ 相对误差：{train_mape_percent:.1f}%")
+
+        st.markdown("<div class='section-title'>🔍 房价影响因素深度分析</div>", unsafe_allow_html=True)
         st.pyplot(st.session_state.fig, use_container_width=True)
-        
-        # 下载功能
+
         buf = BytesIO()
-        st.session_state.fig.savefig(buf, format="png", dpi=150, bbox_inches='tight')
+        st.session_state.fig.savefig(buf, format="png", dpi=180, bbox_inches='tight')
         buf.seek(0)
         st.download_button(
-            label="📥 下载因素分析图",
+            label="📥 高清下载分析图",
             data=buf,
-            file_name="房价影响因素分析.png",
+            file_name="房价影响因素_高清分析图.png",
             mime="image/png",
             use_container_width=True
         )
     else:
         st.markdown("""
         <div class="info-card">
-            <h4 style='margin-top:0; color:#0066cc;'>💡 使用指南</h4>
-            <p style='margin-bottom:0; line-height:1.6;'>
-            1. 填写上方的房屋基础信息<br>
-            2. 完善周边配套设施参数<br>
-            3. 点击「开始预测房价」按钮获取结果<br>
-            4. 查看影响房价的关键因素分析
+            <h4 style='margin-top:0; color:#1677ff;'>💡 操作指南</h4>
+            <p style='margin-bottom:0; line-height:1.7;'>
+            1. 填写房屋基础属性、周边配套、城市宏观数据<br>
+            2. 点击【开始预测房价】按钮一键计算<br>
+            3. 自动生成可视化因素分解图，直观查看涨跌原因
             </p>
         </div>
         """, unsafe_allow_html=True)
 
 # ================== 页脚 ==================
 st.markdown("---")
-st.markdown("<p style='text-align: center; color: #64748b;'>© 2025 房价预测系统 | 基于XGBoost+SHAP | 数据来源：2021-2024 山东省济南/济宁/烟台</p>", unsafe_allow_html=True)
+st.markdown(
+    "<p style='text-align: center; color: #718096;'>© 2025 房价预测系统 | XGBoost+SHAP | 数据范围：山东济南/烟台/济宁 2021-2024</p>",
+    unsafe_allow_html=True
+)
