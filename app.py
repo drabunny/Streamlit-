@@ -59,8 +59,8 @@ def load_artifacts():
 
 try:
     model, FEATURE_COLS, encoders, y_train_mean = load_artifacts()
-    train_rmse = 2988.51  # 从实验中得到
-    train_mape_percent = (train_rmse / y_train_mean) * 100  # 相对误差百分比
+    train_rmse = 2988.51
+    train_mape_percent = (train_rmse / y_train_mean) * 100
 except FileNotFoundError as e:
     st.error(f"❌ 缺少必要的模型文件：{e}")
     st.stop()
@@ -115,36 +115,35 @@ def plot_shap_waterfall(input_dict):
     return fig
 
 def get_sample_input():
-    """一个示例房源数据"""
     return {
-        '建筑面积': 95.0,
-        '房龄': 8,
-        '朝向': '南',
-        '装修': '精装',
-        '有无电梯': '有',
-        'dist_地铁站': 800,
-        'count_地铁站_within_10000m': 3,
-        'dist_公交站': 200,
-        'count_公交站_within_10000m': 15,
-        'dist_学校': 500,
-        'count_学校_within_10000m': 6,
-        'dist_综合医院': 1200,
-        'count_综合医院_within_10000m': 2,
-        'dist_诊所/社区医院': 400,
-        'count_诊所/社区医院_within_10000m': 5,
-        'dist_药店': 150,
-        'count_药店_within_10000m': 10,
-        'dist_大型商场': 2000,
-        'count_大型商场_within_10000m': 1,
-        'dist_小型商业': 100,
-        'count_小型商业_within_10000m': 30,
-        'dist_餐饮': 50,
-        'count_餐饮_within_10000m': 50,
-        'dist_公园': 600,
-        'count_公园_within_10000m': 2
+        'area': 95.0,
+        'age': 8,
+        'orientation': '南',
+        'decoration': '精装',
+        'elevator': '有',
+        'dist_subway': 800,
+        'count_subway': 3,
+        'dist_bus': 200,
+        'count_bus': 15,
+        'dist_school': 500,
+        'count_school': 6,
+        'dist_hospital': 1200,
+        'count_hospital': 2,
+        'dist_clinic': 400,
+        'count_clinic': 5,
+        'dist_pharmacy': 150,
+        'count_pharmacy': 10,
+        'dist_mall': 2000,
+        'count_mall': 1,
+        'dist_small_business': 100,
+        'count_small_business': 30,
+        'dist_catering': 50,
+        'count_catering': 50,
+        'dist_park': 600,
+        'count_park': 2
     }
 
-# ================== 初始化 session_state 中的输入值 ==================
+# ================== 初始化 session_state 默认值 ==================
 if 'init_done' not in st.session_state:
     # 房屋本体
     st.session_state.area = 100.0
@@ -181,7 +180,7 @@ if 'init_done' not in st.session_state:
     st.session_state.tertiary = default_macro['tertiary']
     st.session_state.init_done = True
 
-# ================== 侧边栏快速设置 ==================
+# ================== 侧边栏快速操作 ==================
 with st.sidebar:
     st.header("⚙️ 快速测试")
     if st.button("📋 填充示例房源"):
@@ -189,7 +188,7 @@ with st.sidebar:
         for key, value in sample.items():
             if key in st.session_state:
                 st.session_state[key] = value
-        st.success("示例已加载！请点击「开始预测」按钮")
+        st.success("示例已加载！请点击「开始预测」")
         st.rerun()
     
     st.markdown("---")
@@ -293,7 +292,6 @@ with col_left:
 with col_right:
     st.markdown("## 📈 预测结果")
     if st.button("🔮 开始预测", type="primary", use_container_width=True):
-        # 收集所有输入
         try:
             input_dict = {
                 '建筑面积': st.session_state.area,
