@@ -151,12 +151,10 @@ def plot_shap_waterfall_clean(input_dict):
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
     expected_value = explainer.expected_value
-    # 计算最终预测值
     final_pred = predict_price(input_dict)
 
-    # 创建图形
-    fig, ax = plt.subplots(figsize=(14, 8), facecolor='white')
     # 绘制瀑布图
+    fig = plt.figure(figsize=(14, 8), facecolor='white')
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
@@ -165,15 +163,19 @@ def plot_shap_waterfall_clean(input_dict):
             feature_names=FEATURE_COLS
         ),
         show=False,
-        max_display=15,
-        ax=ax
+        max_display=15
     )
-    # 隐藏多余的标题和数值
+    
+    # 获取当前 axes
+    ax = plt.gca()
+    # 隐藏图中可能重复的数值文本（包含 "model output value" 和 "base value" 的文本）
     for text in ax.texts:
-        if 'model output value' in text.get_text().lower() or 'base value' in text.get_text().lower():
+        txt = text.get_text()
+        if 'model output' in txt.lower() or 'base value' in txt.lower():
             text.set_visible(False)
-    # 在合适位置添加统一的预测值标签
+    # 修改标题，突出最终预测值
     ax.set_title(f'房价影响因素瀑布图\n最终预测值: {final_pred:.0f} 元/平米', fontsize=14, pad=20)
+    # 在右下角添加一个标注框，显示预测值（可选但更清晰）
     ax.annotate(f'预测值 = {final_pred:.0f}', xy=(0.95, 0.05), xycoords='axes fraction',
                 fontsize=12, ha='right', color='#1677ff', weight='bold',
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="#1677ff"))
