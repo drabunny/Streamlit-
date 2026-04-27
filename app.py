@@ -165,7 +165,7 @@ def plot_shap_waterfall(input_dict):
     plt.clf()
 
     fig = plt.figure(figsize=(14, 8), dpi=150, facecolor="#ffffff")
-    
+
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[0],
@@ -180,18 +180,35 @@ def plot_shap_waterfall(input_dict):
     ax = plt.gca()
     ax.set_facecolor("#ffffff")
 
-    for text in ax.texts:
-        x_pos, y_pos = text.get_position()
-        if y_pos > 0.95: 
-            text.set_visible(False)
+    from matplotlib.patches import Rectangle
+    
+    # 获取当前坐标轴的范围
+    x_min, x_max = ax.get_xlim()
+    y_min, y_max = ax.get_ylim()
 
-    plt.suptitle(
+    cover_height = (y_max - y_min) * 0.18
+    cover_rect = Rectangle(
+        (x_min, y_max - cover_height),  # 左下角坐标
+        x_max - x_min,                  # 宽度
+        cover_height,                    # 高度
+        facecolor="#ffffff",             # 白色
+        edgecolor="none",
+        zorder=100
+    )
+    ax.add_patch(cover_rect)
+
+    plt.text(
+        (x_min + x_max) / 2, 
+        y_max - cover_height / 2, 
         "房价影响因素贡献分解图",
         fontsize=13,
-        y=0.98,
         color="#1f2937",
-        weight='bold'
+        weight='bold',
+        ha='center',
+        va='center',
+        zorder=101
     )
+
     plt.xticks(fontsize=10)
     plt.yticks(fontsize=9)
     plt.subplots_adjust(left=0.35)
