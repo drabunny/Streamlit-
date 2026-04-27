@@ -170,14 +170,14 @@ def plot_shap_waterfall_clean(input_dict):
     ax.set_title(f'房价影响因素分解图\n最终预测值：{final_pred:.0f} 元/平米', fontsize=14, pad=20)
     return fig
 
-# ================== 基于SHAP的自动建议生成（无需API）==================
+# ================== 基于SHAP的自动建议生成 ==================
 def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict, city):
     """
-    根据SHAP贡献值和用户输入，生成自然语言购房建议
+    根据SHAP贡献值和用户输入，生成结构清晰的自然语言购房建议（Markdown格式）
     """
     advice_parts = []
-    
-    # ---- 1. 价格水平总体评价 ----
+
+    # ---------- 1. 总体评价 ----------
     if pred_price > 20000:
         price_level = "较高"
     elif pred_price > 12000:
@@ -186,89 +186,154 @@ def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict
         price_level = "中等"
     else:
         price_level = "较低"
-    advice_parts.append(f"该房源预测单价为{pred_price:.0f}元/平米，属于{price_level}水平。")
-    
-    # ---- 2. 正向因素解释（涨价的理由） ----
+    advice_parts.append(f"### 📊 总体评价\n该房源预测单价为 **{pred_price:.0f}元/平米**，属于 **{price_level}** 水平。")
+
+    # ---------- 2. 正向溢价因素 ----------
     if top_positive:
         pos_lines = []
         for name, val in top_positive[:5]:
             val_int = int(round(val))
-            # 根据特征名定制描述
+            # 根据特征名定制描述，并引用用户输入的具体数值
             if name == '建筑面积':
                 area = input_dict.get('建筑面积', 0)
-                pos_lines.append(f"• 房屋建筑面积{area:.0f}平米，使价格上升约{val_int}元/平米")
-            elif '房龄' in name and val > 0:
-                # 房龄通常为负，若为正则说明较新
+                pos_lines.append(f"- **建筑面积**：{area:.0f} 平米，贡献约 **+{val_int}** 元/平米")
+            elif name == '房龄':
                 age = input_dict.get('房龄', 0)
-                pos_lines.append(f"• 房龄仅{age:.0f}年，相对较新，使价格上升约{val_int}元/平米")
+                pos_lines.append(f"- **房龄**：仅 {age} 年，较新，贡献约 **+{val_int}** 元/平米")
             elif 'count_地铁站' in name:
-                count = input_dict.get('count_地铁站_within_10000m', 0)
-                pos_lines.append(f"• 周边10公里内有{count}个地铁站，交通便利，使价格上升约{val_int}元/平米")
+                cnt = input_dict.get('count_地铁站_within_10000m', 0)
+                pos_lines.append(f"- **地铁站数量**：10km 内 {cnt} 个，贡献约 **+{val_int}** 元/平米")
+            elif 'count_公交站' in name:
+                cnt = input_dict.get('count_公交站_within_10000m', 0)
+                pos_lines.append(f"- **公交站密度**：10km 内 {cnt} 个，贡献约 **+{val_int}** 元/平米")
             elif 'count_学校' in name:
-                count = input_dict.get('count_学校_within_10000m', 0)
-                pos_lines.append(f"• 周边10公里内有{count}所学校，教育资源丰富，使价格上升约{val_int}元/平米")
+                cnt = input_dict.get('count_学校_within_10000m', 0)
+                pos_lines.append(f"- **学校数量**：10km 内 {cnt} 所，贡献约 **+{val_int}** 元/平米")
             elif 'count_综合医院' in name:
-                count = input_dict.get('count_综合医院_within_10000m', 0)
-                pos_lines.append(f"• 周边10公里内有{count}家综合医院，医疗配套良好，使价格上升约{val_int}元/平米")
+                cnt = input_dict.get('count_综合医院_within_10000m', 0)
+                pos_lines.append(f"- **综合医院数量**：10km 内 {cnt} 家，贡献约 **+{val_int}** 元/平米")
+            elif 'count_诊所/社区医院' in name:
+                cnt = input_dict.get('count_诊所/社区医院_within_10000m', 0)
+                pos_lines.append(f"- **诊所/社区医院数量**：10km 内 {cnt} 家，贡献约 **+{val_int}** 元/平米")
             elif 'count_餐饮' in name:
-                count = input_dict.get('count_餐饮_within_10000m', 0)
-                pos_lines.append(f"• 周边餐饮密度高（{count}家），生活便利，使价格上升约{val_int}元/平米")
+                cnt = input_dict.get('count_餐饮_within_10000m', 0)
+                pos_lines.append(f"- **餐饮丰富度**：10km 内 {cnt} 家，贡献约 **+{val_int}** 元/平米")
+            elif '有无电梯' in name:
+                ele = input_dict.get('有无电梯', '')
+                if ele == 1:
+                    ele_str = "有电梯"
+                elif ele == 0:
+                    ele_str = "无电梯"
+                else:
+                    ele_str = "未知"
+                pos_lines.append(f"- **电梯配置**：{ele_str}，贡献约 **+{val_int}** 元/平米")
             elif '城镇居民人均可支配收入' in name:
-                income = input_dict.get('城镇居民人均可支配收入', 0)
-                pos_lines.append(f"• 城市居民收入水平较高（{income:.0f}元），购买力支撑，使价格上升约{val_int}元/平米")
+                inc = input_dict.get('城镇居民人均可支配收入', 0)
+                pos_lines.append(f"- **居民收入**：{inc:.0f} 元/年，贡献约 **+{val_int}** 元/平米")
             elif '人均GDP' in name:
                 gdp = input_dict.get('人均GDP', 0)
-                pos_lines.append(f"• 城市经济发展较好（人均GDP {gdp:.0f}元），拉动房价上涨约{val_int}元/平米")
-            elif 'count_小型商业' in name:
-                count = input_dict.get('count_小型商业_within_10000m', 0)
-                pos_lines.append(f"• 周边商业氛围浓厚（{count}个小商铺），生活便利，使价格上升约{val_int}元/平米")
+                pos_lines.append(f"- **经济发展**：人均 GDP {gdp:.0f} 元，贡献约 **+{val_int}** 元/平米")
+            elif '常住人口' in name:
+                pop = input_dict.get('常住人口', 0)
+                pos_lines.append(f"- **城市规模**：常住人口 {pop} 万人，贡献约 **+{val_int}** 元/平米")
+            elif '第三产业占比' in name:
+                ter = input_dict.get('第三产业占比', 0)
+                pos_lines.append(f"- **服务业占比**：{ter}%，贡献约 **+{val_int}** 元/平米")
+            elif 'dist_公园' in name:
+                dist = input_dict.get('dist_公园', 0)
+                pos_lines.append(f"- **公园距离**：距公园 {dist} 米，贡献约 **+{val_int}** 元/平米")
             else:
-                pos_lines.append(f"• {name} 因素使价格上升约{val_int}元/平米")
+                pos_lines.append(f"- **{name}**：贡献约 **+{val_int}** 元/平米")
         if pos_lines:
-            advice_parts.append("【主要溢价因素】\n" + "\n".join(pos_lines))
-    
-    # ---- 3. 负向因素解释（折价的原因） ----
+            advice_parts.append("### 📈 主要溢价因素\n" + "\n".join(pos_lines))
+
+    # ---------- 3. 负向折价因素 ----------
     if top_negative:
         neg_lines = []
         for name, val in top_negative[:5]:
-            val_abs = int(round(-val))  # val为负数
-            if '房龄' in name:
+            val_abs = int(round(-val))  # 取绝对值
+            if name == '建筑面积':
+                area = input_dict.get('建筑面积', 0)
+                neg_lines.append(f"- **建筑面积**：{area:.0f} 平米，贡献约 **-{val_abs}** 元/平米")
+            elif name == '房龄':
                 age = input_dict.get('房龄', 0)
-                neg_lines.append(f"• 房龄已达{age:.0f}年，相对老旧，使价格下降约{val_abs}元/平米")
-            elif 'dist_地铁站' in name:
-                dist = input_dict.get('dist_地铁站', 0)
-                neg_lines.append(f"• 距最近地铁站{dist:.0f}米，略远，使价格下降约{val_abs}元/平米")
-            elif 'dist_学校' in name:
-                dist = input_dict.get('dist_学校', 0)
-                neg_lines.append(f"• 距学校{dist:.0f}米，步行稍远，使价格下降约{val_abs}元/平米")
+                neg_lines.append(f"- **房龄**：已达 {age} 年，相对老旧，贡献约 **-{val_abs}** 元/平米")
+            elif 'count_地铁站' in name:
+                cnt = input_dict.get('count_地铁站_within_10000m', 0)
+                neg_lines.append(f"- **地铁站数量**：10km 内 {cnt} 个，贡献约 **-{val_abs}** 元/平米")
+            elif 'count_公交站' in name:
+                cnt = input_dict.get('count_公交站_within_10000m', 0)
+                neg_lines.append(f"- **公交站密度**：10km 内 {cnt} 个，贡献约 **-{val_abs}** 元/平米")
+            elif 'count_学校' in name:
+                cnt = input_dict.get('count_学校_within_10000m', 0)
+                neg_lines.append(f"- **学校数量**：10km 内 {cnt} 所，贡献约 **-{val_abs}** 元/平米")
+            elif 'count_综合医院' in name:
+                cnt = input_dict.get('count_综合医院_within_10000m', 0)
+                neg_lines.append(f"- **综合医院数量**：10km 内 {cnt} 家，贡献约 **-{val_abs}** 元/平米")
             elif 'dist_综合医院' in name:
                 dist = input_dict.get('dist_综合医院', 0)
-                neg_lines.append(f"• 距综合医院{dist:.0f}米，医疗配套距离较远，使价格下降约{val_abs}元/平米")
+                neg_lines.append(f"- **医院距离**：距综合医院 {dist} 米，较远，贡献约 **-{val_abs}** 元/平米")
+            elif 'dist_学校' in name:
+                dist = input_dict.get('dist_学校', 0)
+                neg_lines.append(f"- **学校距离**：距学校 {dist} 米，稍远，贡献约 **-{val_abs}** 元/平米")
+            elif 'dist_地铁站' in name:
+                dist = input_dict.get('dist_地铁站', 0)
+                neg_lines.append(f"- **地铁站距离**：距地铁站 {dist} 米，略远，贡献约 **-{val_abs}** 元/平米")
             elif 'dist_公交站' in name:
                 dist = input_dict.get('dist_公交站', 0)
-                neg_lines.append(f"• 距公交站{dist:.0f}米，公共交通不够便捷，使价格下降约{val_abs}元/平米")
+                neg_lines.append(f"- **公交站距离**：距公交站 {dist} 米，不便捷，贡献约 **-{val_abs}** 元/平米")
+            elif '朝向' in name:
+                ori = input_dict.get('朝向', '')
+                if ori == 0:
+                    ori_str = "南"
+                elif ori == 1:
+                    ori_str = "北"
+                elif ori == 2:
+                    ori_str = "东"
+                elif ori == 3:
+                    ori_str = "西"
+                else:
+                    ori_str = "其他"
+                neg_lines.append(f"- **房屋朝向**：{ori_str}，贡献约 **-{val_abs}** 元/平米")
+            elif '装修' in name:
+                dec = input_dict.get('装修', '')
+                if dec == 0:
+                    dec_str = "精装"
+                elif dec == 1:
+                    dec_str = "简装"
+                elif dec == 2:
+                    dec_str = "毛坯"
+                else:
+                    dec_str = "其他"
+                neg_lines.append(f"- **装修程度**：{dec_str}，贡献约 **-{val_abs}** 元/平米")
+            elif '城镇居民人均可支配收入' in name:
+                inc = input_dict.get('城镇居民人均可支配收入', 0)
+                neg_lines.append(f"- **居民收入**：{inc:.0f} 元/年，贡献约 **-{val_abs}** 元/平米")
+            elif '常住人口' in name:
+                pop = input_dict.get('常住人口', 0)
+                neg_lines.append(f"- **城市规模**：常住人口 {pop} 万人，贡献约 **-{val_abs}** 元/平米")
             else:
-                neg_lines.append(f"• {name} 因素使价格下降约{val_abs}元/平米")
+                neg_lines.append(f"- **{name}**：贡献约 **-{val_abs}** 元/平米")
         if neg_lines:
-            advice_parts.append("【主要折价因素】\n" + "\n".join(neg_lines))
-    
-    # ---- 4. 城市层面宏观提示 ----
+            advice_parts.append("### 📉 主要折价因素\n" + "\n".join(neg_lines))
+
+    # ---------- 4. 城市洞察 ----------
     city_advice = {
-        "济南市": "作为省会，长期发展潜力较好，地铁沿线或优质学区房源保值能力更强。",
-        "烟台市": "沿海宜居城市，建议关注海景资源、旅游配套及开发区规划。",
-        "济宁市": "本地自住需求为主，房价相对平稳，可重点考察学校、医院周边房源。"
+        "济南市": "济南作为省会，长期发展潜力较好，地铁沿线或优质学区房源保值能力更强。",
+        "烟台市": "烟台为沿海宜居城市，建议关注海景资源、旅游配套及开发区规划。",
+        "济宁市": "济宁本地自住需求为主，房价相对平稳，可重点考察学校、医院周边房源。"
     }
-    advice_parts.append(f"【城市洞察】{city_advice.get(city, '根据当地市场情况综合判断。')}")
-    
-    # ---- 5. 综合购买建议 ----
+    advice_parts.append(f"### 🏙️ 城市洞察\n{city_advice.get(city, '根据当地市场情况综合判断。')}")
+
+    # ---------- 5. 综合购买建议 ----------
     if pred_price > 20000:
         purchase_advice = "当前价格处于较高水平，建议仔细对比同地段类似房源，重点关注房屋质量及稀缺资源（如真学区、地铁口）。"
     elif pred_price < 8000:
         purchase_advice = "价格明显低于区域平均水平，性价比突出，但需谨慎排查房屋产权、质量隐患或周边不利设施。"
     else:
         purchase_advice = "价格属于合理区间，可根据自身通勤需求、学区偏好及生活便利性做出决策。"
-    advice_parts.append(f"【购买建议】{purchase_advice}")
-    
+    advice_parts.append(f"### 💎 购买建议\n{purchase_advice}")
+
     return "\n\n".join(advice_parts)
 
 # ================== 初始化 session_state ==================
@@ -503,8 +568,8 @@ with col_right:
         st.caption(f"📊 训练集基准均价：{y_train_mean:.0f} 元/平米")
         st.caption(f"⚙️ 模型误差 RMSE：{train_rmse:.0f} ｜ 相对误差：{train_mape_percent:.1f}%")
 
-        # 显示AI建议（基于规则）
-        st.markdown("<div class='section-title'>💡 AI购房建议</div>", unsafe_allow_html=True)
+        # 显示建议（基于规则）
+        st.markdown("<div class='section-title'>💡购房建议</div>", unsafe_allow_html=True)
         st.markdown(f'<div class="advice-card">{st.session_state.advice}</div>', unsafe_allow_html=True)
 
         st.markdown("<div class='section-title'>🔍 房价影响因素深度分析</div>", unsafe_allow_html=True)
