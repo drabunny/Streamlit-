@@ -105,9 +105,10 @@ except FileNotFoundError as e:
     st.stop()
 
 # ================== 中文字体 ==================
-plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'SimHei', 'Microsoft YaHei']
-plt.rcParams['axes.unicode_minus'] = False
-plt.rcParams['font.family'] = 'sans-serif'
+font_path = 'wqy-microhei.ttf'
+fm.fontManager.addfont(font_path)
+plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name()
+plt.rcParams['axes.unicode_minus'] = False  # 正常显示负号
 
 # ================== 宏观数据字典 ==================
 MACRO_DATA = {
