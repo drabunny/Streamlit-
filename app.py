@@ -566,8 +566,6 @@ with col_right:
         </div>
         ''', unsafe_allow_html=True)
 
-        st.caption(f"📊 训练集基准均价：{y_train_mean:.0f} 元/平米")
-        st.caption(f"⚙️ 模型误差 RMSE：{train_rmse:.0f} ｜ 相对误差：{train_mape_percent:.1f}%")
 
         # 显示建议（基于规则）
         st.markdown("<div class='section-title'>💡购房建议</div>", unsafe_allow_html=True)
