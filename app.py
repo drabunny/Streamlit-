@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ================== CSS (保持不变) ==================
+# ================== CSS ==================
 st.markdown("""
 <style>
     .stApp { background-color: #f5f7fa; }
@@ -93,7 +93,7 @@ def load_artifacts():
     model = joblib.load("best_model_final_deploy.pkl")
     feature_cols = joblib.load("feature_columns_final_deploy.pkl")
     encoders = joblib.load("label_encoders_final_deploy.pkl")
-    y_mean = np.load("y_train_log_mean.npy").item()   # 训练集对数均值
+    y_mean = np.load("y_train_log_mean.npy").item()
     return model, feature_cols, encoders, y_mean
 
 try:
@@ -103,16 +103,15 @@ except FileNotFoundError as e:
     st.stop()
 
 # ================== 中文字体 ==================
-font_path = 'wqy-microhei.ttf'  # 请确保该字体文件存在，若不存在可尝试 'SimHei.ttf' 等
+font_path = 'wqy-microhei.ttf'
 try:
     fm.fontManager.addfont(font_path)
-except FileNotFoundError:
-    # fallback to default font if font file missing
+except:
     pass
 plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name() if font_path else plt.rcParams['font.sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
 
-# ================== 宏观数据字典 (保持不变) ==================
+# ================== 宏观数据字典 ==================
 MACRO_DATA = {
     ("济南市", 2021): {"income": 57449, "gdp": 122400, "population": 933.6, "tertiary": 61.7},
     ("济南市", 2022): {"income": 59459, "gdp": 127800, "population": 941.5, "tertiary": 61.7},
@@ -142,47 +141,31 @@ def encode_categorical(value, encoder):
             return encoder.transform([encoder.classes_[0]])[0]
 
 def compute_derived_features(basic_dict, city, year):
-    """
-    基于用户输入的基础特征，计算衍生特征，并加入城市和年份。
-    返回一个完整的特征字典，包含所有 34 个特征。
-    """
     d = basic_dict.copy()
-    # 衍生特征
     d['地铁便利性'] = 1.0 / (d['dist_地铁站'] + 1) * np.log1p(d['count_地铁站_within_10000m'])
     d['医疗资源'] = d['count_综合医院_within_10000m'] + d['count_诊所/社区医院_within_10000m']
     d['商业繁华度'] = d['count_大型商场_within_10000m'] + d['count_小型商业_within_10000m']
     d['人均GDP_log'] = np.log1p(d['人均GDP'])
-    # 城市和年份
     d['城市'] = city
     d['年份'] = year
     return d
 
 def predict_price(full_input_dict):
-    """
-    输入完整特征字典（34个特征），返回原始单价（元/平米）
-    """
     input_df = pd.DataFrame([full_input_dict])[FEATURE_COLS]
-    # 城市列需要是 category 类型（与训练时一致）
     if '城市' in input_df.columns:
         input_df['城市'] = input_df['城市'].astype('category')
-    # 模型预测的是 log1p(单价)，还原
     pred_log = model.predict(input_df)[0]
     return np.expm1(pred_log)
 
-# ================== SHAP 瀑布图 ==================
+# ================== SHAP瀑布图 ==================
 def plot_shap_waterfall_clean(full_input_dict):
-    """
-    生成 SHAP 瀑布图，解释对数价格的贡献，并在标题中显示还原后的单价。
-    """
     input_df = pd.DataFrame([full_input_dict])[FEATURE_COLS]
     if '城市' in input_df.columns:
         input_df['城市'] = input_df['城市'].astype('category')
-    
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
-    expected_value = explainer.expected_value   # 对数均值基值
-    pred_log = model.predict(input_df)[0]       # 对数预测值
-    pred_price = np.expm1(pred_log)             # 原始单价
+    expected_value = explainer.expected_value
+    pred_price = predict_price(full_input_dict)
 
     fig = plt.figure(figsize=(12, 8), facecolor='white')
     shap.waterfall_plot(
@@ -196,23 +179,19 @@ def plot_shap_waterfall_clean(full_input_dict):
         max_display=15
     )
     ax = plt.gca()
-    # 隐藏自动生成的英文标签
     for text in ax.texts:
         txt = text.get_text()
         if any(key in txt.lower() for key in ['model output', 'base value', 'f(x)=', 'e[f(x)]=', 'output value']):
             text.set_visible(False)
-    ax.set_title(f'房价影响因素分解图 (对数尺度)\n模型预测值 (对数): {pred_log:.4f} → 还原后单价: {pred_price:.0f} 元/平米', fontsize=14, pad=20)
+    ax.set_title(f'房价影响因素分解图（对数尺度）\n模型预测对数：{model.predict(input_df)[0]:.4f} → 预测单价：{pred_price:.0f} 元/平米', fontsize=14, pad=20)
     return fig
 
-# ================== 自动建议生成 (微调以适配新特征) ==================
+# ================== 购房建议（贡献值转换为价格单位） ==================
 def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict, city):
-    """
-    根据SHAP贡献值和用户输入生成购房建议（Markdown格式）。
-    注意：input_dict 包含全部 34 个特征。
-    """
+    scale = pred_price + 1   # 将对数贡献转换为近似价格贡献 (dp = (1+p)*dlog)
     advice_parts = []
 
-    # ---------- 总体评价 ----------
+    # 总体评价
     if pred_price > 20000:
         price_level = "较高"
     elif pred_price > 12000:
@@ -222,124 +201,105 @@ def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict
     else:
         price_level = "较低"
     advice_parts.append(f"📊 总体评价\n该房源预测单价为 {pred_price:.0f}元/平米，属于{price_level}水平。")
-    
-    # ---------- 正向因素 ----------
+
+    # 正向因素
     if top_positive:
         pos_lines = []
         for name, val in top_positive[:5]:
-            val_int = int(round(val))
-            # 对常见特征使用友好描述，其余用通用描述
+            contrib_price = int(round(val * scale))   # 转换为价格贡献
+            # 特征友好描述
             if name == '建筑面积':
-                area = input_dict.get('建筑面积', 0)
-                pos_lines.append(f"- **建筑面积**：{area:.0f} 平米，贡献约 **+{val_int}** 元/平米 (对数)")
+                pos_lines.append(f"- **建筑面积**：{input_dict.get('建筑面积',0):.0f} ㎡，贡献约 **+{contrib_price}** 元/平米")
             elif name == '地铁便利性':
-                pos_lines.append(f"- **地铁便利性** (综合距离与数量)：贡献约 **+{val_int}**")
+                pos_lines.append(f"- **地铁便利性**（综合距离与数量）：贡献约 **+{contrib_price}** 元/平米")
             elif name == '医疗资源':
-                pos_lines.append(f"- **医疗资源** (综合医院+诊所数量)：贡献约 **+{val_int}**")
+                pos_lines.append(f"- **医疗资源**（医院+诊所密度）：贡献约 **+{contrib_price}** 元/平米")
             elif name == '商业繁华度':
-                pos_lines.append(f"- **商业繁华度** (商场+商业数量)：贡献约 **+{val_int}**")
+                pos_lines.append(f"- **商业繁华度**（商场+商业密度）：贡献约 **+{contrib_price}** 元/平米")
             elif 'count_地铁站' in name:
-                cnt = input_dict.get('count_地铁站_within_10000m', 0)
-                pos_lines.append(f"- **地铁站数量**：10km 内 {cnt} 个，贡献约 **+{val_int}**")
+                pos_lines.append(f"- **地铁站数量**：10km内 {input_dict.get('count_地铁站_within_10000m',0)} 个，贡献约 **+{contrib_price}** 元/平米")
             elif 'count_公交站' in name:
-                cnt = input_dict.get('count_公交站_within_10000m', 0)
-                pos_lines.append(f"- **公交站密度**：10km 内 {cnt} 个，贡献约 **+{val_int}**")
+                pos_lines.append(f"- **公交站密度**：10km内 {input_dict.get('count_公交站_within_10000m',0)} 个，贡献约 **+{contrib_price}** 元/平米")
             elif 'count_学校' in name:
-                cnt = input_dict.get('count_学校_within_10000m', 0)
-                pos_lines.append(f"- **学校数量**：10km 内 {cnt} 所，贡献约 **+{val_int}**")
+                pos_lines.append(f"- **学校数量**：10km内 {input_dict.get('count_学校_within_10000m',0)} 所，贡献约 **+{contrib_price}** 元/平米")
             elif 'count_综合医院' in name:
-                cnt = input_dict.get('count_综合医院_within_10000m', 0)
-                pos_lines.append(f"- **综合医院数量**：10km 内 {cnt} 家，贡献约 **+{val_int}**")
+                pos_lines.append(f"- **综合医院数量**：10km内 {input_dict.get('count_综合医院_within_10000m',0)} 家，贡献约 **+{contrib_price}** 元/平米")
             elif 'count_诊所/社区医院' in name:
-                cnt = input_dict.get('count_诊所/社区医院_within_10000m', 0)
-                pos_lines.append(f"- **诊所/社区医院数量**：10km 内 {cnt} 家，贡献约 **+{val_int}**")
+                pos_lines.append(f"- **诊所/社区医院数量**：10km内 {input_dict.get('count_诊所/社区医院_within_10000m',0)} 家，贡献约 **+{contrib_price}** 元/平米")
             elif 'count_餐饮' in name:
-                cnt = input_dict.get('count_餐饮_within_10000m', 0)
-                pos_lines.append(f"- **餐饮丰富度**：10km 内 {cnt} 家，贡献约 **+{val_int}**")
+                pos_lines.append(f"- **餐饮丰富度**：10km内 {input_dict.get('count_餐饮_within_10000m',0)} 家，贡献约 **+{contrib_price}** 元/平米")
             elif '城镇居民人均可支配收入' in name:
-                inc = input_dict.get('城镇居民人均可支配收入', 0)
-                pos_lines.append(f"- **居民收入**：{inc:.0f} 元/年，贡献约 **+{val_int}**")
+                pos_lines.append(f"- **居民收入**：{input_dict.get('城镇居民人均可支配收入',0):.0f} 元/年，贡献约 **+{contrib_price}** 元/平米")
             elif '人均GDP' in name:
-                gdp = input_dict.get('人均GDP', 0)
-                pos_lines.append(f"- **经济发展**：人均 GDP {gdp:.0f} 元，贡献约 **+{val_int}**")
+                pos_lines.append(f"- **人均GDP**：{input_dict.get('人均GDP',0)} 元，贡献约 **+{contrib_price}** 元/平米")
             elif '常住人口' in name:
-                pop = input_dict.get('常住人口', 0)
-                pos_lines.append(f"- **人口规模**：常住人口 {pop} 万人，贡献约 **+{val_int}**")
+                pos_lines.append(f"- **人口规模**：{input_dict.get('常住人口',0)} 万人，贡献约 **+{contrib_price}** 元/平米")
             elif '第三产业占比' in name:
-                ter = input_dict.get('第三产业占比', 0)
-                pos_lines.append(f"- **服务业占比**：{ter}%，贡献约 **+{val_int}**")
+                pos_lines.append(f"- **服务业占比**：{input_dict.get('第三产业占比',0)}%，贡献约 **+{contrib_price}** 元/平米")
             else:
-                pos_lines.append(f"- **{name}**：贡献约 **+{val_int}**")
-        if pos_lines:
-            advice_parts.append("### 📈 主要溢价因素\n" + "\n".join(pos_lines))
+                pos_lines.append(f"- **{name}**：贡献约 **+{contrib_price}** 元/平米")
+        advice_parts.append("### 📈 主要溢价因素\n" + "\n".join(pos_lines))
 
-    # ---------- 负向因素 ----------
+    # 负向因素
     if top_negative:
         neg_lines = []
         for name, val in top_negative[:5]:
-            val_abs = int(round(-val))
+            contrib_price = int(round(-val * scale))   # 取正数显示
             if name == '建筑面积':
-                area = input_dict.get('建筑面积', 0)
-                neg_lines.append(f"- **建筑面积**：{area:.0f} 平米，贡献约 **-{val_abs}**")
+                neg_lines.append(f"- **建筑面积**：{input_dict.get('建筑面积',0):.0f} ㎡，贡献约 **-{contrib_price}** 元/平米")
             elif name == '地铁便利性':
-                neg_lines.append(f"- **地铁便利性** 较低，贡献约 **-{val_abs}**")
+                neg_lines.append(f"- **地铁便利性**较低，贡献约 **-{contrib_price}** 元/平米")
             elif name == '医疗资源':
-                neg_lines.append(f"- **医疗资源** 不足，贡献约 **-{val_abs}**")
+                neg_lines.append(f"- **医疗资源**不足，贡献约 **-{contrib_price}** 元/平米")
             elif name == '商业繁华度':
-                neg_lines.append(f"- **商业繁华度** 较低，贡献约 **-{val_abs}**")
+                neg_lines.append(f"- **商业繁华度**较低，贡献约 **-{contrib_price}** 元/平米")
             elif 'dist_地铁站' in name:
                 dist = input_dict.get('dist_地铁站', 0)
-                neg_lines.append(f"- **地铁站距离**：{dist} 米，较远，贡献约 **-{val_abs}**")
+                neg_lines.append(f"- **距地铁站** {dist} 米，较远，贡献约 **-{contrib_price}** 元/平米")
             elif 'dist_综合医院' in name:
                 dist = input_dict.get('dist_综合医院', 0)
-                neg_lines.append(f"- **医院距离**：{dist} 米，较远，贡献约 **-{val_abs}**")
+                neg_lines.append(f"- **距综合医院** {dist} 米，贡献约 **-{contrib_price}** 元/平米")
             elif 'dist_学校' in name:
                 dist = input_dict.get('dist_学校', 0)
-                neg_lines.append(f"- **学校距离**：{dist} 米，稍远，贡献约 **-{val_abs}**")
+                neg_lines.append(f"- **距学校** {dist} 米，贡献约 **-{contrib_price}** 元/平米")
             elif '朝向' in name:
-                ori_val = input_dict.get('朝向', '')
-                ori_map = {0: "南", 1: "北", 2: "东", 3: "西", 4: "其他"}
-                ori_str = ori_map.get(ori_val, "未知")
-                neg_lines.append(f"- **房屋朝向**：{ori_str}，贡献约 **-{val_abs}**")
+                ori_val = input_dict.get('朝向', '未知')
+                ori_map = {0:"南",1:"北",2:"东",3:"西",4:"其他"}
+                neg_lines.append(f"- **朝向** {ori_map.get(ori_val,'未知')}，贡献约 **-{contrib_price}** 元/平米")
             elif '装修' in name:
-                dec_val = input_dict.get('装修', '')
-                dec_map = {0: "精装", 1: "简装", 2: "毛坯", 3: "其他", 4: "未知"}
-                dec_str = dec_map.get(dec_val, "未知")
-                neg_lines.append(f"- **装修程度**：{dec_str}，贡献约 **-{val_abs}**")
+                dec_val = input_dict.get('装修', '未知')
+                dec_map = {0:"精装",1:"简装",2:"毛坯",3:"其他",4:"未知"}
+                neg_lines.append(f"- **装修** {dec_map.get(dec_val,'未知')}，贡献约 **-{contrib_price}** 元/平米")
             else:
-                neg_lines.append(f"- **{name}**：贡献约 **-{val_abs}**")
-        if neg_lines:
-            advice_parts.append("### 📉 主要折价因素\n" + "\n".join(neg_lines))
+                neg_lines.append(f"- **{name}**：贡献约 **-{contrib_price}** 元/平米")
+        advice_parts.append("### 📉 主要折价因素\n" + "\n".join(neg_lines))
 
-    # ---------- 城市洞察 ----------
-    city_advice = {
+    # 城市洞察
+    city_insight = {
         "济南市": "济南作为省会，长期发展潜力较好，地铁沿线或优质学区房源保值能力更强。",
         "烟台市": "烟台为沿海宜居城市，建议关注海景资源、旅游配套及开发区规划。",
         "济宁市": "济宁本地自住需求为主，房价相对平稳，可重点考察学校、医院周边房源。"
     }
-    advice_parts.append(f"### 🏙️ 城市洞察\n{city_advice.get(city, '根据当地市场情况综合判断。')}")
+    advice_parts.append(f"### 🏙️ 城市洞察\n{city_insight.get(city, '根据当地市场情况综合判断。')}")
 
-    # ---------- 综合购买建议 ----------
+    # 综合建议
     if pred_price > 20000:
-        purchase_advice = "当前价格处于较高水平，建议仔细对比同地段类似房源，重点关注房屋质量及稀缺资源。"
+        purchase = "当前价格处于较高水平，建议仔细对比同地段类似房源，重点关注房屋质量及稀缺资源。"
     elif pred_price < 8000:
-        purchase_advice = "价格明显低于区域平均水平，性价比突出，但需谨慎排查房屋产权、质量隐患或周边不利设施。"
+        purchase = "价格明显低于区域平均水平，性价比突出，但需谨慎排查房屋产权、质量隐患或周边不利设施。"
     else:
-        purchase_advice = "价格属于合理区间，可根据自身通勤需求、学区偏好及生活便利性做出决策。"
-    advice_parts.append(f"### 💎 购买建议\n{purchase_advice}")
+        purchase = "价格属于合理区间，可根据自身通勤需求、学区偏好及生活便利性做出决策。"
+    advice_parts.append(f"### 💎 购买建议\n{purchase}")
 
     return "\n\n".join(advice_parts)
 
-
 # ================== 初始化 session_state ==================
 if 'init_done' not in st.session_state:
-    # 基础特征
     st.session_state.area = 100.0
-    st.session_state.age = 5          # 房龄输入框保留但模型不用，不影响
+    # 房龄已移除，不再初始化
     st.session_state.orientation = '南'
     st.session_state.decoration = '精装'
     st.session_state.elevator = '有'
-    # 微观区位
     st.session_state.dist_subway = 1500
     st.session_state.count_subway = 2
     st.session_state.dist_bus = 500
@@ -360,7 +320,6 @@ if 'init_done' not in st.session_state:
     st.session_state.count_catering = 30
     st.session_state.dist_park = 1000
     st.session_state.count_park = 2
-    # 城市与年份
     st.session_state.city = "济南市"
     st.session_state.year = 2023
     default_macro = get_default_macro(st.session_state.city, st.session_state.year)
@@ -371,10 +330,7 @@ if 'init_done' not in st.session_state:
     st.session_state.init_done = True
 
 # ================== 页面主标题 ==================
-st.markdown(
-    "<h1 style='text-align: center; color: #1677ff; margin-bottom: 2rem; font-weight: 800;'>🏠 房价预测与影响因素分析系统</h1>",
-    unsafe_allow_html=True
-)
+st.markdown("<h1 style='text-align: center; color: #1677ff; margin-bottom: 2rem;'>🏠 房价预测与影响因素分析系统</h1>", unsafe_allow_html=True)
 
 # ================== 宏观经济指标 ==================
 st.markdown("<div class='section-title'>📊 城市宏观经济指标</div>", unsafe_allow_html=True)
@@ -392,7 +348,6 @@ with col_reset:
         st.session_state.tertiary = default["tertiary"]
         st.rerun()
 
-# 当城市/年份变化时自动更新宏观数据
 if selected_city != st.session_state.city or selected_year != st.session_state.year:
     st.session_state.city = selected_city
     st.session_state.year = selected_year
@@ -419,17 +374,15 @@ col_left, col_right = st.columns([1, 1.2], gap="large")
 
 with col_left:
     st.markdown("<div class='section-title'>🏷️ 房屋基础信息</div>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns(3)
-    with col1:
+    col_a, col_b = st.columns(2)   # 只保留两列
+    with col_a:
         st.number_input("建筑面积 (㎡)", key="area", min_value=30.0, max_value=300.0, step=1.0)
-    with col2:
-        st.number_input("房龄 (年) - 本模型不参与计算", key="age", min_value=0, max_value=50, step=1)
-    with col3:
+    with col_b:
         st.selectbox("房屋朝向", ["南", "北", "东", "西", "其他"], key="orientation")
-    col4, col5 = st.columns(2)
-    with col4:
+    col_c, col_d = st.columns(2)
+    with col_c:
         st.selectbox("装修程度", ["精装", "简装", "毛坯", "其他", "未知"], key="decoration")
-    with col5:
+    with col_d:
         st.selectbox("电梯配置", ["有", "无", "未知"], key="elevator")
 
     st.markdown("<div class='section-title'>🚏 周边配套设施</div>", unsafe_allow_html=True)
@@ -496,7 +449,7 @@ with col_right:
 
     if predict_btn:
         try:
-            # 构建基础特征字典（原始输入，不含衍生特征和城市/年份）
+            # 构建基础特征（不含房龄）
             basic_dict = {
                 '建筑面积': st.session_state.area,
                 '朝向': encode_categorical(st.session_state.orientation, encoders['朝向']),
@@ -527,14 +480,13 @@ with col_right:
                 '常住人口': st.session_state.population,
                 '第三产业占比': st.session_state.tertiary,
             }
-            # 生成完整特征字典（34个特征）
             full_dict = compute_derived_features(basic_dict, st.session_state.city, st.session_state.year)
 
             with st.spinner("模型计算中，请稍候..."):
                 pred_price = predict_price(full_dict)
                 fig = plot_shap_waterfall_clean(full_dict)
 
-                # 计算 SHAP 贡献用于建议
+                # SHAP 贡献（对数尺度）
                 explainer = shap.TreeExplainer(model)
                 input_df = pd.DataFrame([full_dict])[FEATURE_COLS]
                 if '城市' in input_df.columns:
@@ -542,14 +494,15 @@ with col_right:
                 shap_vals = explainer.shap_values(input_df)
                 feature_contrib = list(zip(FEATURE_COLS, shap_vals[0]))
                 feature_contrib.sort(key=lambda x: x[1], reverse=True)
-                top_positive = [(name, round(val, 0)) for name, val in feature_contrib if val > 0][:5]
-                top_negative = [(name, round(val, 0)) for name, val in feature_contrib if val < 0][:5]
+                top_positive = [(name, val) for name, val in feature_contrib if val > 0][:5]
+                top_negative = [(name, val) for name, val in feature_contrib if val < 0][:5]
 
                 advice = generate_advice_from_shap(pred_price, top_positive, top_negative, full_dict, st.session_state.city)
 
             st.session_state['pred'] = pred_price
             st.session_state['fig'] = fig
             st.session_state['advice'] = advice
+
         except Exception as e:
             st.error(f"预测失败: {str(e)}")
 
@@ -584,10 +537,9 @@ with col_right:
             <h4 style='margin-top:0; color:#1677ff;'>💡 操作指南</h4>
             <p style='margin-bottom:0; line-height:1.7;'>
             1. 选择城市和年份，自动填充宏观数据，也可手动修改<br>
-            2. 点击「重置」按钮可将宏观数据恢复为当前城市/年份的默认值<br>
-            3. 填写房屋基础属性、周边配套参数<br>
-            4. 点击【开始预测房价】按钮一键计算<br>
-            5. 自动生成因素分解图及智能化购房建议（基于SHAP归因）
+            2. 点击「重置」按钮可将宏观数据恢复为默认值<br>
+            3. 填写房屋基础属性与周边配套参数<br>
+            4. 点击【开始预测房价】按钮，获取预测单价及因素分析
             </p>
         </div>
         """, unsafe_allow_html=True)
