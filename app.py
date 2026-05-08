@@ -98,8 +98,6 @@ def load_artifacts():
 
 try:
     model, FEATURE_COLS, encoders, y_train_mean = load_artifacts()
-    train_rmse = 2988.51
-    train_mape_percent = (train_rmse / y_train_mean) * 100
 except FileNotFoundError as e:
     st.error(f"❌ 缺少必要的模型文件：{e}")
     st.stop()
