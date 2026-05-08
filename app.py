@@ -90,9 +90,9 @@ st.markdown("""
 # ================== 加载模型与处理对象 ==================
 @st.cache_resource
 def load_artifacts():
-    model = joblib.load("best_xgboost_tuned.pkl")
-    feature_cols = joblib.load("feature_columns.pkl")
-    encoders = joblib.load("label_encoders.pkl")
+    model = joblib.load("best_model_final_deploy.pkl")
+    feature_cols = joblib.load("feature_columns_final_deploy.pkl")
+    encoders = joblib.load("label_encoders_final_deploy.pkl")
     y_mean = np.load("y_train_mean.npy").item()
     return model, feature_cols, encoders, y_mean
 
