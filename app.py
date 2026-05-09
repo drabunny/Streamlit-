@@ -392,56 +392,56 @@ with col_left:
         with c1:
             st.number_input("距最近地铁站 (米)", key="dist_subway", min_value=0, max_value=20000, step=100)
         with c2:
-            st.number_input("10km内地铁站数量", key="count_subway", min_value=0, max_value=20, step=1)
+            st.number_input("10km内地铁站数量", key="count_subway", min_value=0, max_value=20000, step=1)
         c1, c2 = st.columns(2)
         with c1:
-            st.number_input("距最近公交站 (米)", key="dist_bus", min_value=0, max_value=5000, step=100)
+            st.number_input("距最近公交站 (米)", key="dist_bus", min_value=0, max_value=20000, step=100)
         with c2:
-            st.number_input("10km内公交站数量", key="count_bus", min_value=0, max_value=100, step=5)
+            st.number_input("10km内公交站数量", key="count_bus", min_value=0, max_value=20000, step=5)
 
     with st.expander("🏥 教育医疗"):
         c1, c2 = st.columns(2)
         with c1:
-            st.number_input("距最近学校 (米)", key="dist_school", min_value=0, max_value=10000, step=100)
+            st.number_input("距最近学校 (米)", key="dist_school", min_value=0, max_value=20000, step=100)
         with c2:
-            st.number_input("10km内学校数量", key="count_school", min_value=0, max_value=50, step=1)
+            st.number_input("10km内学校数量", key="count_school", min_value=0, max_value=20000, step=1)
         c1, c2 = st.columns(2)
         with c1:
-            st.number_input("距最近综合医院 (米)", key="dist_hospital", min_value=0, max_value=15000, step=100)
+            st.number_input("距最近综合医院 (米)", key="dist_hospital", min_value=0, max_value=20000, step=100)
         with c2:
-            st.number_input("10km内综合医院数量", key="count_hospital", min_value=0, max_value=20, step=1)
+            st.number_input("10km内综合医院数量", key="count_hospital", min_value=0, max_value=20000, step=1)
         c1, c2 = st.columns(2)
         with c1:
-            st.number_input("距最近诊所 (米)", key="dist_clinic", min_value=0, max_value=5000, step=100)
+            st.number_input("距最近诊所 (米)", key="dist_clinic", min_value=0, max_value=20000, step=100)
         with c2:
-            st.number_input("10km内诊所数量", key="count_clinic", min_value=0, max_value=50, step=1)
+            st.number_input("10km内诊所数量", key="count_clinic", min_value=0, max_value=20000, step=1)
         c1, c2 = st.columns(2)
         with c1:
-            st.number_input("距最近药店 (米)", key="dist_pharmacy", min_value=0, max_value=2000, step=100)
+            st.number_input("距最近药店 (米)", key="dist_pharmacy", min_value=0, max_value=20000, step=100)
         with c2:
-            st.number_input("10km内药店数量", key="count_pharmacy", min_value=0, max_value=100, step=1)
+            st.number_input("10km内药店数量", key="count_pharmacy", min_value=0, max_value=20000, step=1)
 
     with st.expander("🛍️ 商业休闲"):
         c1, c2 = st.columns(2)
         with c1:
-            st.number_input("距最近大型商场 (米)", key="dist_mall", min_value=0, max_value=10000, step=100)
+            st.number_input("距最近大型商场 (米)", key="dist_mall", min_value=0, max_value=20000, step=100)
         with c2:
-            st.number_input("10km内大型商场数量", key="count_mall", min_value=0, max_value=20, step=1)
+            st.number_input("10km内大型商场数量", key="count_mall", min_value=0, max_value=20000, step=1)
         c1, c2 = st.columns(2)
         with c1:
-            st.number_input("距最近小型商业 (米)", key="dist_small_business", min_value=0, max_value=3000, step=100)
+            st.number_input("距最近小型商业 (米)", key="dist_small_business", min_value=0, max_value=20000, step=100)
         with c2:
-            st.number_input("10km内小型商业数量", key="count_small_business", min_value=0, max_value=200, step=5)
+            st.number_input("10km内小型商业数量", key="count_small_business", min_value=0, max_value=20000, step=5)
         c1, c2 = st.columns(2)
         with c1:
-            st.number_input("距最近餐饮场所 (米)", key="dist_catering", min_value=0, max_value=2000, step=50)
+            st.number_input("距最近餐饮场所 (米)", key="dist_catering", min_value=0, max_value=20000, step=50)
         with c2:
-            st.number_input("10km内餐饮数量", key="count_catering", min_value=0, max_value=300, step=10)
+            st.number_input("10km内餐饮数量", key="count_catering", min_value=0, max_value=20000, step=10)
         c1, c2 = st.columns(2)
         with c1:
-            st.number_input("距最近公园 (米)", key="dist_park", min_value=0, max_value=10000, step=100)
+            st.number_input("距最近公园 (米)", key="dist_park", min_value=0, max_value=20000, step=100)
         with c2:
-            st.number_input("10km内公园数量", key="count_park", min_value=0, max_value=20, step=1)
+            st.number_input("10km内公园数量", key="count_park", min_value=0, max_value=20000, step=1)
 
 with col_right:
     st.markdown("<div class='section-title'>📈 房价预测结果</div>", unsafe_allow_html=True)
