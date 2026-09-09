@@ -111,10 +111,8 @@ except:
 plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name() if font_path else plt.rcParams['font.sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
 
-# ================== 强制使用的城市（训练集中一定存在） ==================
-# 请根据您的训练数据修改为实际存在的城市名，例如 '烟台市' 或 '济南市'（若训练集有）
-# 如果训练集没有城市特征，则需要在特征列表中移除该列，但此处假设有
-KNOWN_CITY = '烟台市'   # 请替换为您的训练数据中实际出现的城市名称
+# ================== 获取第32列特征名（用于显示） ==================
+COL32_NAME = FEATURE_COLS[32] if len(FEATURE_COLS) > 32 else "未知特征（第32列）"
 
 # ================== 宏观数据字典 ==================
 MACRO_DATA = {
@@ -145,40 +143,44 @@ def encode_categorical(value, encoder):
         else:
             return encoder.transform([encoder.classes_[0]])[0]
 
-def compute_derived_features(basic_dict, user_selected_city, year):
+def compute_derived_features(basic_dict, user_selected_city, year, col32_value):
     """
-    预测时，城市特征强制使用 KNOWN_CITY，而宏观数据（收入、GDP等）仍使用用户选择的城市数据。
-    这样既保证了模型输入合法，又保留了宏观指标的地区差异。
+    构建最终特征字典，其中第32列使用用户输入的 col32_value
     """
-    # 强制城市为训练集中的已知值
-    city_for_model = KNOWN_CITY
-    # 但宏观数据仍然使用用户选择的城市（用于填充收入、GDP等）
-    # 注意：这里我们仍将用户选择的城市用于查找宏观数据，但预测的城市列固定
     d = basic_dict.copy()
     d['地铁便利性'] = 1.0 / (d['dist_地铁站'] + 1) * np.log1p(d['count_地铁站_within_10000m'])
     d['医疗资源'] = d['count_综合医院_within_10000m'] + d['count_诊所/社区医院_within_10000m']
     d['商业繁华度'] = d['count_大型商场_within_10000m'] + d['count_小型商业_within_10000m']
     d['人均GDP_log'] = np.log1p(d['人均GDP'])
-    # 城市特征使用固定值
-    d['城市'] = city_for_model
+    # 注意：这里不再使用 '城市' 特征，而是使用第32列的真实特征名
+    # 由于我们不知道特征名，我们通过 FEATURE_COLS[32] 获取键名，并赋值
+    # 如果该列名称是 '城市'，则会被覆盖，但我们已经强制使用 col32_value
+    d[COL32_NAME] = col32_value
+    # 年份保留，但可能不是类别特征
     d['年份'] = year
-    # 提示用户（可选）
-    if user_selected_city != city_for_model:
-        st.info(f"ℹ️ 预测时城市特征固定为“{city_for_model}”，宏观数据仍使用“{user_selected_city}”的指标。")
+    # 如果还有 '城市' 键（当 COL32_NAME 不是 '城市' 时），我们需要删除它，因为模型不需要
+    # 但模型特征列表中有 '城市' 吗？需要检查：如果 '城市' 在 FEATURE_COLS 中且索引不是32，则应保留
+    # 我们按原逻辑保留 '城市'，但实际预测时模型会取 FEATURE_COLS 中的列，所以 '城市' 会被包含
+    # 但若 '城市' 不在 FEATURE_COLS 中，则无关紧要
+    # 为了安全，我们确保返回的字典只包含 FEATURE_COLS 中的键（在 predict_price 中会过滤）
     return d
 
 def predict_price(full_input_dict):
+    # 构造 DataFrame 并只取模型需要的特征列
     input_df = pd.DataFrame([full_input_dict])[FEATURE_COLS]
-    if '城市' in input_df.columns:
-        input_df['城市'] = input_df['城市'].astype('category')
+    # 将类别列设为 category 类型（如果存在的话）
+    for col in input_df.columns:
+        if input_df[col].dtype == object:
+            input_df[col] = input_df[col].astype('category')
     pred_log = model.predict(input_df)[0]
     return np.expm1(pred_log)
 
 # ================== SHAP瀑布图 ==================
 def plot_shap_waterfall_clean(full_input_dict):
     input_df = pd.DataFrame([full_input_dict])[FEATURE_COLS]
-    if '城市' in input_df.columns:
-        input_df['城市'] = input_df['城市'].astype('category')
+    for col in input_df.columns:
+        if input_df[col].dtype == object:
+            input_df[col] = input_df[col].astype('category')
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(input_df)
     expected_value = explainer.expected_value
@@ -337,6 +339,8 @@ if 'init_done' not in st.session_state:
     st.session_state.gdp = default_macro["gdp"]
     st.session_state.population = default_macro["population"]
     st.session_state.tertiary = default_macro["tertiary"]
+    # 新增：第32列特征值，默认填一个可能的值（请根据实际训练数据修改）
+    st.session_state.col32_value = "历下区"  # 请替换为训练集中存在的值
     st.session_state.init_done = True
 
 # ================== 页面主标题 ==================
@@ -455,6 +459,17 @@ with col_left:
 
 with col_right:
     st.markdown("<div class='section-title'>📈 房价预测结果</div>", unsafe_allow_html=True)
+
+    # 显示第32列特征名，并让用户输入有效值
+    st.markdown(f"**🔍 第32列特征名**：`{COL32_NAME}`")
+    col32_input = st.text_input(
+        f"请输入该特征的有效值（训练集中存在的值）",
+        value=st.session_state.col32_value,
+        key="col32_value_input",
+        help="如果不知道，请查看训练数据中该列的唯一值，或联系模型训练者。"
+    )
+    st.session_state.col32_value = col32_input
+
     predict_btn = st.button("🔮 开始预测房价", type="primary", use_container_width=True)
 
     if predict_btn:
@@ -489,8 +504,13 @@ with col_right:
                 '常住人口': st.session_state.population,
                 '第三产业占比': st.session_state.tertiary,
             }
-            # 注意：此处传入用户选择的城市和年份，但 compute_derived_features 内部会将城市固定为 KNOWN_CITY
-            full_dict = compute_derived_features(basic_dict, st.session_state.city, st.session_state.year)
+            # 调用 compute_derived_features，传入用户选择的城市、年份和第32列的值
+            full_dict = compute_derived_features(
+                basic_dict,
+                st.session_state.city,
+                st.session_state.year,
+                st.session_state.col32_value
+            )
 
             with st.spinner("模型计算中，请稍候..."):
                 pred_price = predict_price(full_dict)
@@ -498,8 +518,9 @@ with col_right:
 
                 explainer = shap.TreeExplainer(model)
                 input_df = pd.DataFrame([full_dict])[FEATURE_COLS]
-                if '城市' in input_df.columns:
-                    input_df['城市'] = input_df['城市'].astype('category')
+                for col in input_df.columns:
+                    if input_df[col].dtype == object:
+                        input_df[col] = input_df[col].astype('category')
                 shap_vals = explainer.shap_values(input_df)
                 feature_contrib = list(zip(FEATURE_COLS, shap_vals[0]))
                 feature_contrib.sort(key=lambda x: x[1], reverse=True)
@@ -514,6 +535,7 @@ with col_right:
 
         except Exception as e:
             st.error(f"预测失败: {str(e)}")
+            st.info("💡 请检查您输入的第32列特征值是否在训练集中存在。如果仍不确定，请联系模型训练者获取该列的有效值列表。")
 
     if 'pred' in st.session_state:
         pred = st.session_state.pred
@@ -548,7 +570,8 @@ with col_right:
             1. 选择城市和年份，自动填充宏观数据，也可手动修改<br>
             2. 点击「重置」按钮可将宏观数据恢复为默认值<br>
             3. 填写房屋基础属性与周边配套参数<br>
-            4. 点击【开始预测房价】按钮，获取预测单价及因素分析
+            4. 在右侧输入第32列特征的有效值（见上方提示）<br>
+            5. 点击【开始预测房价】按钮，获取预测单价及因素分析
             </p>
         </div>
         """, unsafe_allow_html=True)
