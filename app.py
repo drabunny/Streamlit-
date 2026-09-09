@@ -117,16 +117,25 @@ def encode_categorical(value, encoder):
         else:
             return encoder.transform([encoder.classes_[0]])[0]
 
-def compute_derived_features(basic_dict, city, year):
+def compute_derived_features(basic_dict, city_str, year):
     """
-    生成衍生特征，与训练时保持一致
+    生成衍生特征，并处理 '城市' 列
     """
     d = basic_dict.copy()
     d['地铁便利性'] = 1.0 / (d['dist_地铁站'] + 1) * np.log1p(d['count_地铁站_within_10000m'])
     d['医疗资源'] = d['count_综合医院_within_10000m'] + d['count_诊所/社区医院_within_10000m']
     d['商业繁华度'] = d['count_大型商场_within_10000m'] + d['count_小型商业_within_10000m']
     d['人均GDP_log'] = np.log1p(d['人均GDP'])
-    d['城市'] = city
+    
+    # 处理 '城市' 列
+    if '城市' in encoders:
+        # 如果有编码器，则编码用户选择的城市
+        d['城市'] = encode_categorical(city_str, encoders['城市'])
+    else:
+        # 如果没有编码器，则默认为 0（假设训练集中有类别0）
+        d['城市'] = 0
+        st.info("ℹ️ 未找到'城市'编码器，将使用数值 0 作为城市特征值（假设训练集中存在类别0）")
+    
     d['年份'] = year
     return d
 
@@ -215,15 +224,11 @@ with col_city:
 with col_year:
     selected_year = st.selectbox("选择年份", [2021, 2022, 2023, 2024], key="year_select")
 
-# 当城市或年份变化时，自动更新宏观数据（覆盖 session_state 中的值）
-# 但用户仍可手动修改宏观数据，所以仅当未手动修改时自动填充？这里采用直接更新，但用户可覆盖。
-# 为了不覆盖用户手动修改，我们可以在用户点击按钮时再更新，但为了简便，这里检测变化并更新。
-# 更好的方法：记录上次选中的城市和年份，若变化则更新宏。
+# 当城市或年份变化时，自动更新宏观数据
 if 'prev_city' not in st.session_state:
     st.session_state.prev_city = selected_city
     st.session_state.prev_year = selected_year
 if st.session_state.prev_city != selected_city or st.session_state.prev_year != selected_year:
-    # 用户更改了城市或年份，自动更新宏
     macro = CITY_MACRO.get(selected_city, CITY_MACRO["济南市"])
     st.session_state.income = macro['income']
     st.session_state.gdp = macro['gdp']
@@ -231,7 +236,6 @@ if st.session_state.prev_city != selected_city or st.session_state.prev_year != 
     st.session_state.tertiary = macro['tertiary']
     st.session_state.prev_city = selected_city
     st.session_state.prev_year = selected_year
-    # 利用 st.rerun() 刷新界面使数字输入框显示新值
     st.rerun()
 
 # ================== 宏观经济指标 ==================
@@ -364,19 +368,8 @@ with col_right:
                 '第三产业占比': st.session_state.tertiary,
             }
 
-            # 2. 确定城市类别（使用训练集中的第一个城市，避免未知类别）
-            if '城市' in encoders:
-                known_city = encoders['城市'].classes_[0]
-                st.info(f"ℹ️ 预测使用城市: '{known_city}'（训练集中首个城市）")
-            else:
-                # 若编码器没有'城市'，则使用用户选择的（但可能不合法）
-                known_city = selected_city
-                st.warning("⚠️ 未找到'城市'编码器，将使用用户选择的城市，可能不在训练集中。")
-
-            year = selected_year
-
-            # 生成完整特征字典
-            full_dict = compute_derived_features(basic_dict, known_city, year)
+            # 2. 生成完整特征字典（包含衍生特征和城市/年份）
+            full_dict = compute_derived_features(basic_dict, selected_city, selected_year)
 
             # 3. 只保留模型需要的特征
             filtered_dict = {k: full_dict[k] for k in FEATURE_COLS if k in full_dict}
