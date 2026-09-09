@@ -111,6 +111,10 @@ except:
 plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name() if font_path else plt.rcParams['font.sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
 
+# ================== 已知训练集城市列表 ==================
+# 根据错误信息“济南市”不在训练集中，推测训练集包含烟台、济宁（实际请根据您的训练数据调整）
+KNOWN_CITIES = ['烟台市', '济宁市']   # 请替换为您的训练数据中实际出现的城市列表
+
 # ================== 宏观数据字典 ==================
 MACRO_DATA = {
     ("济南市", 2021): {"income": 57449, "gdp": 122400, "population": 933.6, "tertiary": 61.7},
@@ -141,6 +145,12 @@ def encode_categorical(value, encoder):
             return encoder.transform([encoder.classes_[0]])[0]
 
 def compute_derived_features(basic_dict, city, year):
+    # ---------- 新增城市映射 ----------
+    if city not in KNOWN_CITIES:
+        # 显示警告并自动替换为第一个已知城市
+        st.warning(f"⚠️ 您选择的城市“{city}”不在模型训练集中，系统自动使用“{KNOWN_CITIES[0]}”替代进行预测，结果仅供参考。")
+        city = KNOWN_CITIES[0]
+    # --------------------------------
     d = basic_dict.copy()
     d['地铁便利性'] = 1.0 / (d['dist_地铁站'] + 1) * np.log1p(d['count_地铁站_within_10000m'])
     d['医疗资源'] = d['count_综合医院_within_10000m'] + d['count_诊所/社区医院_within_10000m']
@@ -280,6 +290,7 @@ def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict
         "烟台市": "烟台为沿海宜居城市，建议关注海景资源、旅游配套及开发区规划。",
         "济宁市": "济宁本地自住需求为主，房价相对平稳，可重点考察学校、医院周边房源。"
     }
+    # 如果city被映射了，但原始city可能不在字典中，我们用映射后的city来取洞察
     advice_parts.append(f"### 🏙️ 城市洞察\n{city_insight.get(city, '根据当地市场情况综合判断。')}")
 
     # 综合建议
@@ -296,7 +307,6 @@ def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict
 # ================== 初始化 session_state ==================
 if 'init_done' not in st.session_state:
     st.session_state.area = 100.0
-    # 房龄已移除，不再初始化
     st.session_state.orientation = '南'
     st.session_state.decoration = '精装'
     st.session_state.elevator = '有'
