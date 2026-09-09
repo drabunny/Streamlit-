@@ -83,11 +83,10 @@ st.markdown("""
 # ================== 加载模型与处理对象 ==================
 @st.cache_resource
 def load_artifacts():
-    # 使用部署文件名
     model = joblib.load("best_model_final_deploy.pkl")
     feature_cols = joblib.load("feature_columns_final_deploy.pkl")
     encoders = joblib.load("label_encoders_final_deploy.pkl")
-    y_mean = np.load("y_train_log_mean.npy").item()  # 注意文件名
+    y_mean = np.load("y_train_log_mean.npy").item()
     return model, feature_cols, encoders, y_mean
 
 try:
@@ -110,18 +109,30 @@ CITY_MACRO = {
 
 # ================== 辅助函数 ==================
 def encode_categorical(value, encoder):
-    """将类别值转换为编码，若未知则映射为第一个已知类别"""
     try:
         return encoder.transform([value])[0]
     except ValueError:
-        # 若值不在训练集类别中，使用第一个类别（或'其他'）
         if '其他' in encoder.classes_:
             return encoder.transform(['其他'])[0]
         else:
             return encoder.transform([encoder.classes_[0]])[0]
 
+def compute_derived_features(basic_dict, city, year):
+    """
+    生成衍生特征，与训练时保持一致
+    """
+    d = basic_dict.copy()
+    # 衍生特征
+    d['地铁便利性'] = 1.0 / (d['dist_地铁站'] + 1) * np.log1p(d['count_地铁站_within_10000m'])
+    d['医疗资源'] = d['count_综合医院_within_10000m'] + d['count_诊所/社区医院_within_10000m']
+    d['商业繁华度'] = d['count_大型商场_within_10000m'] + d['count_小型商业_within_10000m']
+    d['人均GDP_log'] = np.log1p(d['人均GDP'])
+    # 类别特征 '城市' 和 '年份'
+    d['城市'] = city
+    d['年份'] = year
+    return d
+
 def predict_price(input_dict):
-    # 仅选取模型需要的特征列，并保持顺序
     input_df = pd.DataFrame([input_dict])[FEATURE_COLS]
     return model.predict(input_df)[0]
 
@@ -184,7 +195,10 @@ if 'init_done' not in st.session_state:
     st.session_state.count_catering = 30
     st.session_state.dist_park = 1000
     st.session_state.count_park = 2
-    default_macro = CITY_MACRO['济南市']
+    # 默认城市和年份
+    st.session_state.city = "济南市"
+    st.session_state.year = 2023
+    default_macro = CITY_MACRO[st.session_state.city]
     st.session_state.income = default_macro['income']
     st.session_state.gdp = default_macro['gdp']
     st.session_state.population = default_macro['population']
@@ -196,6 +210,24 @@ st.markdown(
     "<h1 style='text-align: center; color: #1677ff; margin-bottom: 2rem; font-weight: 800;'>🏠 房价预测与影响因素分析系统</h1>",
     unsafe_allow_html=True
 )
+
+# ================== 城市和年份选择 ==================
+st.markdown("<div class='section-title'>📍 城市与年份</div>", unsafe_allow_html=True)
+col_city, col_year = st.columns(2)
+with col_city:
+    selected_city = st.selectbox("选择城市", ["济南市", "烟台市", "济宁市"], key="city_select")
+with col_year:
+    selected_year = st.selectbox("选择年份", [2021, 2022, 2023, 2024], key="year_select")
+
+# 当城市或年份变化时，自动更新宏观数据
+if selected_city != st.session_state.city or selected_year != st.session_state.year:
+    st.session_state.city = selected_city
+    st.session_state.year = selected_year
+    macro = CITY_MACRO.get(selected_city, CITY_MACRO["济南市"])
+    st.session_state.income = macro['income']
+    st.session_state.gdp = macro['gdp']
+    st.session_state.population = macro['population']
+    st.session_state.tertiary = macro['tertiary']
 
 # ================== 宏观经济指标 ==================
 st.markdown("<div class='section-title'>📊 城市宏观经济指标</div>", unsafe_allow_html=True)
@@ -294,8 +326,8 @@ with col_right:
 
     if predict_btn:
         try:
-            # 构造基础字典（包含所有可能用到的特征）
-            input_dict = {
+            # 1. 构建基础特征（不含衍生）
+            basic_dict = {
                 '建筑面积': st.session_state.area,
                 '房龄': st.session_state.age,
                 '朝向': encode_categorical(st.session_state.orientation, encoders['朝向']),
@@ -327,24 +359,22 @@ with col_right:
                 '第三产业占比': st.session_state.tertiary,
             }
 
-            # ========== 关键修正：处理模型中可能包含的额外类别特征 ==========
-            # 如果 FEATURE_COLS 中有 '城市' 或其它类别特征，但 input_dict 未提供，则从 encoders 中获取第一个类别值
-            # 遍历 FEATURE_COLS，若特征名不在 input_dict 中，且该特征在 encoders 中（说明是类别特征），则用第一个类别填充
-            for col in FEATURE_COLS:
-                if col not in input_dict:
-                    # 如果该列在 encoders 中，说明是类别特征
-                    if col in encoders:
-                        # 获取该编码器的第一个类别（或'其他'）
-                        first_class = encoders[col].classes_[0]
-                        input_dict[col] = first_class
-                        st.info(f"ℹ️ 模型需要特征 '{col}'，系统自动填入默认值：'{first_class}'")
-                    else:
-                        # 对于数值特征，若缺失则补0（但通常不会发生）
-                        input_dict[col] = 0
-                        st.warning(f"⚠️ 数值特征 '{col}' 缺失，自动补0，可能影响预测准确性。")
+            # 2. 确定城市类别（使用训练集中的第一个城市，避免未知类别）
+            if '城市' in encoders:
+                known_city = encoders['城市'].classes_[0]
+                st.info(f"ℹ️ 预测使用城市: '{known_city}'（训练集中首个城市）")
+            else:
+                # 若编码器没有'城市'，则使用用户选择的（但可能不合法）
+                known_city = st.session_state.city
+                st.warning("⚠️ 未找到'城市'编码器，将使用用户选择的城市，可能不在训练集中。")
 
-            # 只保留模型需要的特征，并确保顺序
-            filtered_dict = {k: input_dict[k] for k in FEATURE_COLS if k in input_dict}
+            year = st.session_state.year
+
+            # 生成完整特征字典
+            full_dict = compute_derived_features(basic_dict, known_city, year)
+
+            # 3. 只保留模型需要的特征
+            filtered_dict = {k: full_dict[k] for k in FEATURE_COLS if k in full_dict}
             missing = set(FEATURE_COLS) - set(filtered_dict.keys())
             if missing:
                 st.error(f"模型需要以下特征但未能提供：{missing}")
@@ -360,7 +390,6 @@ with col_right:
 
         except Exception as e:
             st.error(f"预测失败: {str(e)}")
-            # 调试信息：显示特征列表
             st.write("🔍 模型特征列表 (共 {} 个):".format(len(FEATURE_COLS)))
             st.write(FEATURE_COLS)
 
@@ -394,9 +423,9 @@ with col_right:
         <div class="info-card">
             <h4 style='margin-top:0; color:#1677ff;'>💡 操作指南</h4>
             <p style='margin-bottom:0; line-height:1.7;'>
-            1. 填写房屋基础属性、周边配套、城市宏观数据<br>
-            2. 点击【开始预测房价】按钮一键计算<br>
-            3. 自动生成可视化因素分解图，直观查看涨跌原因
+            1. 选择城市和年份，自动填充宏观数据<br>
+            2. 填写房屋基础属性与周边配套参数<br>
+            3. 点击【开始预测房价】按钮，获取预测单价及因素分析
             </p>
         </div>
         """, unsafe_allow_html=True)
