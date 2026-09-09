@@ -1,113 +1,132 @@
-import pandas as pd
-import joblib
 import os
+import joblib
+import json
+import numpy as np
+import pandas as pd
+import streamlit as st
 
-# ================== 配置区域 ==================
-# 请根据实际情况修改以下路径
-TRAIN_DATA_PATH = "train_data.csv"                # 训练数据文件路径，支持 .csv 或 .pkl
-ENCODER_PATH = "label_encoders_final_deploy.pkl"  # 编码器文件路径（可选，如果没有可设为 None）
-EXPECTED_CITIES = ["济南市", "烟台市", "济宁市"]   # 预期出现的城市
-# ============================================
+def inspect_city_categories():
+    """
+    检查模型和编码器中关于城市特征的信息，返回一个字典。
+    """
+    result = {
+        'encoder_file_exists': False,
+        'encoder_has_city': False,
+        'encoder_city_classes': None,
+        'model_features': None,
+        'city_feature_index': None,
+        'city_feature_type': None,
+        'error': None
+    }
 
-def load_data(path):
-    """根据文件扩展名加载数据"""
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"文件不存在：{path}")
-    if path.endswith('.csv'):
-        return pd.read_csv(path)
-    elif path.endswith('.pkl') or path.endswith('.pickle'):
-        return pd.read_pickle(path)
-    else:
-        raise ValueError("不支持的文件格式，仅支持 CSV 或 Pickle")
+    encoder_path = "label_encoders_final_deploy.pkl"
+    feature_cols_path = "feature_columns_final_deploy.pkl"
+    model_path = "best_model_final_deploy.pkl"
 
-def main():
-    print("=" * 70)
-    print("🔍 训练数据城市列检查工具")
-    print("=" * 70)
-
-    # 1. 加载训练数据
-    print(f"\n📂 训练数据文件：{TRAIN_DATA_PATH}")
-    try:
-        df = load_data(TRAIN_DATA_PATH)
-        print(f"✅ 成功加载数据，形状：{df.shape}")
-    except Exception as e:
-        print(f"❌ 加载数据失败：{e}")
-        return
-
-    # 2. 检查城市列是否存在
-    city_col = '城市'
-    if city_col not in df.columns:
-        print(f"\n❌ 训练数据中不存在列 '{city_col}'。")
-        print("现有列名：", df.columns.tolist())
-        return
-    print(f"\n✅ 找到列 '{city_col}'，数据类型：{df[city_col].dtype}")
-
-    # 3. 缺失值检查
-    null_count = df[city_col].isnull().sum()
-    if null_count > 0:
-        print(f"\n⚠️  城市列存在 {null_count} 个缺失值。")
-    else:
-        print("\n✅ 城市列无缺失值。")
-
-    # 4. 唯一取值及样本数量
-    value_counts = df[city_col].value_counts(dropna=False)
-    print("\n📊 城市列取值分布：")
-    print(value_counts.to_string())
-
-    # 5. 检查预期城市
-    unique_cities = df[city_col].astype(str).unique().tolist()
-    print("\n🔎 预期城市检查：")
-    all_present = True
-    for city in EXPECTED_CITIES:
-        if city in unique_cities:
-            count = value_counts.get(city, 0)
-            print(f"   ✅ 城市 '{city}' 存在，样本数：{count}")
-        else:
-            print(f"   ❌ 城市 '{city}' 不存在于训练数据中！")
-            all_present = False
-
-    if not all_present:
-        print("\n⚠️  警告：训练数据缺少部分预期城市，模型将无法对这些城市进行预测。")
-        print("   请补充数据并重新训练模型。")
-    else:
-        print("\n✅ 所有预期城市均已包含在训练数据中。")
-
-    # 6. 额外检查：城市值是否为数字（可能已被编码）
-    if df[city_col].dtype in ['int64', 'float64']:
-        print("\n⚠️  注意：城市列是数值类型，可能已使用 LabelEncoder 编码。")
-        print("   请确认预测时是否正确使用了相同的编码器。")
-    elif df[city_col].dtype == 'object':
-        print("\n✅ 城市列是文本类型，可直接作为类别特征使用。")
-
-    # 7. 如果有编码器文件，检查编码器中的城市类别
-    if ENCODER_PATH and os.path.exists(ENCODER_PATH):
-        print(f"\n🔧 编码器文件：{ENCODER_PATH}")
+    # 1. 检查编码器文件
+    if os.path.exists(encoder_path):
+        result['encoder_file_exists'] = True
         try:
-            encoders = joblib.load(ENCODER_PATH)
+            encoders = joblib.load(encoder_path)
             if '城市' in encoders:
-                classes = encoders['城市'].classes_
-                print(f"   编码器 '城市' 中的类别（共 {len(classes)} 个）：")
-                for i, cls in enumerate(classes):
-                    print(f"     {i}: {cls}")
-                # 检查是否与训练数据一致
-                data_cities = set(df[city_col].astype(str).unique())
-                encoder_cities = set(classes)
-                if data_cities != encoder_cities:
-                    print("\n⚠️  训练数据中的城市值与编码器中的类别不一致！")
-                    print(f"   仅存在于训练数据：{data_cities - encoder_cities}")
-                    print(f"   仅存在于编码器：{encoder_cities - data_cities}")
-                else:
-                    print("\n✅ 训练数据与编码器类别一致。")
-            else:
-                print("   未找到 '城市' 键，可能特征名不同或未保存该编码器。")
+                result['encoder_has_city'] = True
+                result['encoder_city_classes'] = encoders['城市'].classes_.tolist()
         except Exception as e:
-            print(f"   加载编码器失败：{e}")
-    elif ENCODER_PATH and not os.path.exists(ENCODER_PATH):
-        print(f"\n⚠️  编码器文件不存在：{ENCODER_PATH}")
+            result['error'] = f"加载编码器失败: {e}"
+            return result
+    else:
+        result['error'] = "编码器文件不存在。"
 
-    print("\n" + "=" * 70)
-    print("检查完成")
-    print("=" * 70)
+    # 2. 加载模型和特征列
+    if os.path.exists(model_path) and os.path.exists(feature_cols_path):
+        try:
+            model = joblib.load(model_path)
+            feature_cols = joblib.load(feature_cols_path)
+            result['model_features'] = feature_cols
+            if '城市' in feature_cols:
+                city_idx = feature_cols.index('城市')
+                result['city_feature_index'] = city_idx
+                booster = model.get_booster()
+                feature_types = booster.feature_types
+                if city_idx < len(feature_types):
+                    result['city_feature_type'] = feature_types[city_idx]
+        except Exception as e:
+            if result['error'] is None:
+                result['error'] = f"加载模型或特征列失败: {e}"
+    else:
+        if result['error'] is None:
+            result['error'] = "模型文件或特征列文件不存在。"
 
-if __name__ == "__main__":
-    main()
+    return result
+
+
+def display_city_diagnostic():
+    """
+    在 Streamlit 中显示城市特征诊断结果。
+    """
+    st.markdown("<div class='section-title'>🔧 城市特征诊断工具</div>", unsafe_allow_html=True)
+    st.markdown("""
+    此工具用于检查模型训练时的城市类别信息，帮助排查“所有城市都无法预测”的问题。
+    """)
+
+    if st.button("开始诊断", key="btn_city_diag"):
+        with st.spinner("正在分析模型和编码器..."):
+            result = inspect_city_categories()
+
+        if result['error']:
+            st.error(f"❌ 诊断过程中出现错误：{result['error']}")
+            return
+
+        # 显示编码器信息
+        st.markdown("#### 📁 编码器文件检查")
+        if result['encoder_file_exists']:
+            st.success("编码器文件存在。")
+            if result['encoder_has_city']:
+                st.success("编码器中包含 '城市' 键。")
+                st.markdown("**编码器中的城市类别列表：**")
+                st.write(result['encoder_city_classes'])
+                st.info("预测时传入的城市名称必须完全匹配以上列表之一（包括大小写、空格等）。")
+            else:
+                st.warning("编码器中 **未找到** '城市' 键，说明城市可能作为原生类别特征直接使用。")
+        else:
+            st.error("编码器文件不存在，无法确认城市类别。")
+
+        # 显示模型特征信息
+        st.markdown("#### 🤖 模型特征检查")
+        if result['model_features'] is not None:
+            st.success("成功加载模型特征列。")
+            if result['city_feature_index'] is not None:
+                st.markdown(f"- 城市特征在模型中的索引：{result['city_feature_index']}")
+                if result['city_feature_type'] == 'c':
+                    st.info("城市列被识别为**分类特征**（categorical）。预测时必须传入模型训练时见过的字符串类别。")
+                elif result['city_feature_type'] == 'q':
+                    st.warning("城市列被识别为**数值特征**，这通常意味着训练时未将其作为类别处理，而是进行了编码或直接作为数值。")
+                else:
+                    st.warning(f"城市特征类型为 '{result['city_feature_type']}'，请检查训练代码。")
+            else:
+                st.error("特征列中找不到 '城市'，请检查 `feature_columns_final_deploy.pkl` 的内容。")
+        else:
+            st.error("模型或特征列文件加载失败。")
+
+        # 综合建议
+        st.markdown("#### 💡 解决建议")
+        if result['encoder_has_city']:
+            st.markdown("""
+            - 若预测时传入的城市名称不在编码器类别列表中，请修改界面选项或更新编码器。
+            - 若编码器列表包含您选择的城市，但模型仍报错，可能是模型训练时未正确使用该编码器，建议重新训练模型。
+            """)
+        elif result['city_feature_type'] == 'c':
+            st.markdown("""
+            - 城市作为原生类别特征，但编码器中无对应信息。这通常是因为训练时使用了 `enable_categorical=True` 且直接传入字符串。
+            - 请确认训练数据中城市列的具体取值（例如是否有额外空格、全角/半角字符）。
+            - 最稳妥的方法是重新训练模型，确保训练数据与预测代码使用的城市名称完全一致。
+            """)
+        else:
+            st.markdown("""
+            - 如果城市列被当作数值特征，而预测时传入字符串，则必然出错。
+            - 请检查训练代码：是否使用了 `LabelEncoder` 对城市进行编码？如果使用了，应在预测时同样进行编码，而不是传递原始字符串。
+            """)
+
+# 在 app.py 的适当位置调用（例如在页面底部）
+with st.expander("🛠️ 模型诊断工具", expanded=False):
+    display_city_diagnostic()
