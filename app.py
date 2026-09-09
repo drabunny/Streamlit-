@@ -122,12 +122,10 @@ def compute_derived_features(basic_dict, city, year):
     生成衍生特征，与训练时保持一致
     """
     d = basic_dict.copy()
-    # 衍生特征
     d['地铁便利性'] = 1.0 / (d['dist_地铁站'] + 1) * np.log1p(d['count_地铁站_within_10000m'])
     d['医疗资源'] = d['count_综合医院_within_10000m'] + d['count_诊所/社区医院_within_10000m']
     d['商业繁华度'] = d['count_大型商场_within_10000m'] + d['count_小型商业_within_10000m']
     d['人均GDP_log'] = np.log1p(d['人均GDP'])
-    # 类别特征 '城市' 和 '年份'
     d['城市'] = city
     d['年份'] = year
     return d
@@ -168,7 +166,7 @@ def plot_shap_waterfall(input_dict):
     plt.tight_layout(pad=2.5)
     return fig
 
-# ================== 初始化 session_state ==================
+# ================== 初始化 session_state（不含 city/year） ==================
 if 'init_done' not in st.session_state:
     st.session_state.area = 100.0
     st.session_state.age = 5
@@ -195,10 +193,8 @@ if 'init_done' not in st.session_state:
     st.session_state.count_catering = 30
     st.session_state.dist_park = 1000
     st.session_state.count_park = 2
-    # 默认城市和年份
-    st.session_state.city = "济南市"
-    st.session_state.year = 2023
-    default_macro = CITY_MACRO[st.session_state.city]
+    # 宏观经济默认值（初始为济南市2023）
+    default_macro = CITY_MACRO["济南市"]
     st.session_state.income = default_macro['income']
     st.session_state.gdp = default_macro['gdp']
     st.session_state.population = default_macro['population']
@@ -219,15 +215,24 @@ with col_city:
 with col_year:
     selected_year = st.selectbox("选择年份", [2021, 2022, 2023, 2024], key="year_select")
 
-# 当城市或年份变化时，自动更新宏观数据
-if selected_city != st.session_state.city or selected_year != st.session_state.year:
-    st.session_state.city = selected_city
-    st.session_state.year = selected_year
+# 当城市或年份变化时，自动更新宏观数据（覆盖 session_state 中的值）
+# 但用户仍可手动修改宏观数据，所以仅当未手动修改时自动填充？这里采用直接更新，但用户可覆盖。
+# 为了不覆盖用户手动修改，我们可以在用户点击按钮时再更新，但为了简便，这里检测变化并更新。
+# 更好的方法：记录上次选中的城市和年份，若变化则更新宏。
+if 'prev_city' not in st.session_state:
+    st.session_state.prev_city = selected_city
+    st.session_state.prev_year = selected_year
+if st.session_state.prev_city != selected_city or st.session_state.prev_year != selected_year:
+    # 用户更改了城市或年份，自动更新宏
     macro = CITY_MACRO.get(selected_city, CITY_MACRO["济南市"])
     st.session_state.income = macro['income']
     st.session_state.gdp = macro['gdp']
     st.session_state.population = macro['population']
     st.session_state.tertiary = macro['tertiary']
+    st.session_state.prev_city = selected_city
+    st.session_state.prev_year = selected_year
+    # 利用 st.rerun() 刷新界面使数字输入框显示新值
+    st.rerun()
 
 # ================== 宏观经济指标 ==================
 st.markdown("<div class='section-title'>📊 城市宏观经济指标</div>", unsafe_allow_html=True)
@@ -365,10 +370,10 @@ with col_right:
                 st.info(f"ℹ️ 预测使用城市: '{known_city}'（训练集中首个城市）")
             else:
                 # 若编码器没有'城市'，则使用用户选择的（但可能不合法）
-                known_city = st.session_state.city
+                known_city = selected_city
                 st.warning("⚠️ 未找到'城市'编码器，将使用用户选择的城市，可能不在训练集中。")
 
-            year = st.session_state.year
+            year = selected_year
 
             # 生成完整特征字典
             full_dict = compute_derived_features(basic_dict, known_city, year)
