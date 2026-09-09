@@ -111,9 +111,35 @@ except:
 plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name() if font_path else plt.rcParams['font.sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
 
-# ================== 已知训练集城市列表 ==================
-# 根据错误信息“济南市”不在训练集中，推测训练集包含烟台、济宁（实际请根据您的训练数据调整）
-KNOWN_CITIES = ['烟台市', '济宁市']   # 请替换为您的训练数据中实际出现的城市列表
+# ================== 自动获取训练集城市列表 ==================
+KNOWN_CITIES = None
+
+# 尝试从 encoders 中获取城市编码器的类别
+if '城市' in encoders:
+    KNOWN_CITIES = encoders['城市'].classes_.tolist()
+    st.info(f"🔍 从编码器中加载训练集城市列表：{KNOWN_CITIES}")
+else:
+    # 如果 encoders 中没有 '城市'，则尝试从模型内部获取（若模型是用 enable_categorical=True 训练的）
+    try:
+        # 获取模型的特征类型，如果是 'c' 表示类别，并试图获取 categories_
+        # 注意：XGBoost 1.6+ 的 Booster 对象有 feature_types 和 feature_names
+        booster = model.get_booster()
+        feature_types = booster.feature_types
+        if feature_types:
+            # 找到 '城市' 特征的索引
+            if '城市' in FEATURE_COLS:
+                idx = FEATURE_COLS.index('城市')
+                # 如果该特征类型是 'c'，尝试从 booster 获取 categories（可能不支持）
+                # 这里留作扩展，实际常用方法是在训练时保存编码器
+                pass
+    except:
+        pass
+
+# 如果仍然没有获取到，则使用您手动指定的列表（请根据实际情况修改）
+if KNOWN_CITIES is None:
+    # 这里替换为您的训练集实际城市名，例如 ['青岛市', '潍坊市', ...]
+    KNOWN_CITIES = ['烟台市', '济宁市']   # 请务必修改为正确的城市名
+    st.warning(f"⚠️ 未能从模型文件中读取城市列表，使用默认列表：{KNOWN_CITIES}。请确保这些城市确实在训练集中，否则预测仍可能出错。")
 
 # ================== 宏观数据字典 ==================
 MACRO_DATA = {
@@ -145,12 +171,10 @@ def encode_categorical(value, encoder):
             return encoder.transform([encoder.classes_[0]])[0]
 
 def compute_derived_features(basic_dict, city, year):
-    # ---------- 新增城市映射 ----------
+    # 城市映射：如果不在训练集列表中，则替换为第一个已知城市
     if city not in KNOWN_CITIES:
-        # 显示警告并自动替换为第一个已知城市
         st.warning(f"⚠️ 您选择的城市“{city}”不在模型训练集中，系统自动使用“{KNOWN_CITIES[0]}”替代进行预测，结果仅供参考。")
         city = KNOWN_CITIES[0]
-    # --------------------------------
     d = basic_dict.copy()
     d['地铁便利性'] = 1.0 / (d['dist_地铁站'] + 1) * np.log1p(d['count_地铁站_within_10000m'])
     d['医疗资源'] = d['count_综合医院_within_10000m'] + d['count_诊所/社区医院_within_10000m']
