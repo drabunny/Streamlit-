@@ -111,35 +111,10 @@ except:
 plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name() if font_path else plt.rcParams['font.sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
 
-# ================== 自动获取训练集城市列表 ==================
-KNOWN_CITIES = None
-
-# 尝试从 encoders 中获取城市编码器的类别
-if '城市' in encoders:
-    KNOWN_CITIES = encoders['城市'].classes_.tolist()
-    st.info(f"🔍 从编码器中加载训练集城市列表：{KNOWN_CITIES}")
-else:
-    # 如果 encoders 中没有 '城市'，则尝试从模型内部获取（若模型是用 enable_categorical=True 训练的）
-    try:
-        # 获取模型的特征类型，如果是 'c' 表示类别，并试图获取 categories_
-        # 注意：XGBoost 1.6+ 的 Booster 对象有 feature_types 和 feature_names
-        booster = model.get_booster()
-        feature_types = booster.feature_types
-        if feature_types:
-            # 找到 '城市' 特征的索引
-            if '城市' in FEATURE_COLS:
-                idx = FEATURE_COLS.index('城市')
-                # 如果该特征类型是 'c'，尝试从 booster 获取 categories（可能不支持）
-                # 这里留作扩展，实际常用方法是在训练时保存编码器
-                pass
-    except:
-        pass
-
-# 如果仍然没有获取到，则使用您手动指定的列表（请根据实际情况修改）
-if KNOWN_CITIES is None:
-    # 这里替换为您的训练集实际城市名，例如 ['青岛市', '潍坊市', ...]
-    KNOWN_CITIES = ['烟台市', '济宁市']   # 请务必修改为正确的城市名
-    st.warning(f"⚠️ 未能从模型文件中读取城市列表，使用默认列表：{KNOWN_CITIES}。请确保这些城市确实在训练集中，否则预测仍可能出错。")
+# ================== 强制使用的城市（训练集中一定存在） ==================
+# 请根据您的训练数据修改为实际存在的城市名，例如 '烟台市' 或 '济南市'（若训练集有）
+# 如果训练集没有城市特征，则需要在特征列表中移除该列，但此处假设有
+KNOWN_CITY = '烟台市'   # 请替换为您的训练数据中实际出现的城市名称
 
 # ================== 宏观数据字典 ==================
 MACRO_DATA = {
@@ -170,18 +145,26 @@ def encode_categorical(value, encoder):
         else:
             return encoder.transform([encoder.classes_[0]])[0]
 
-def compute_derived_features(basic_dict, city, year):
-    # 城市映射：如果不在训练集列表中，则替换为第一个已知城市
-    if city not in KNOWN_CITIES:
-        st.warning(f"⚠️ 您选择的城市“{city}”不在模型训练集中，系统自动使用“{KNOWN_CITIES[0]}”替代进行预测，结果仅供参考。")
-        city = KNOWN_CITIES[0]
+def compute_derived_features(basic_dict, user_selected_city, year):
+    """
+    预测时，城市特征强制使用 KNOWN_CITY，而宏观数据（收入、GDP等）仍使用用户选择的城市数据。
+    这样既保证了模型输入合法，又保留了宏观指标的地区差异。
+    """
+    # 强制城市为训练集中的已知值
+    city_for_model = KNOWN_CITY
+    # 但宏观数据仍然使用用户选择的城市（用于填充收入、GDP等）
+    # 注意：这里我们仍将用户选择的城市用于查找宏观数据，但预测的城市列固定
     d = basic_dict.copy()
     d['地铁便利性'] = 1.0 / (d['dist_地铁站'] + 1) * np.log1p(d['count_地铁站_within_10000m'])
     d['医疗资源'] = d['count_综合医院_within_10000m'] + d['count_诊所/社区医院_within_10000m']
     d['商业繁华度'] = d['count_大型商场_within_10000m'] + d['count_小型商业_within_10000m']
     d['人均GDP_log'] = np.log1p(d['人均GDP'])
-    d['城市'] = city
+    # 城市特征使用固定值
+    d['城市'] = city_for_model
     d['年份'] = year
+    # 提示用户（可选）
+    if user_selected_city != city_for_model:
+        st.info(f"ℹ️ 预测时城市特征固定为“{city_for_model}”，宏观数据仍使用“{user_selected_city}”的指标。")
     return d
 
 def predict_price(full_input_dict):
@@ -220,12 +203,11 @@ def plot_shap_waterfall_clean(full_input_dict):
     ax.set_title(f'房价影响因素分解图（对数尺度）\n模型预测对数：{model.predict(input_df)[0]:.4f} → 预测单价：{pred_price:.0f} 元/平米', fontsize=14, pad=20)
     return fig
 
-# ================== 购房建议（贡献值转换为价格单位） ==================
+# ================== 购房建议（不变） ==================
 def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict, city):
-    scale = pred_price + 1   # 将对数贡献转换为近似价格贡献 (dp = (1+p)*dlog)
+    scale = pred_price + 1
     advice_parts = []
 
-    # 总体评价
     if pred_price > 20000:
         price_level = "较高"
     elif pred_price > 12000:
@@ -236,12 +218,10 @@ def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict
         price_level = "较低"
     advice_parts.append(f"📊 总体评价\n该房源预测单价为 {pred_price:.0f}元/平米，属于{price_level}水平。")
 
-    # 正向因素
     if top_positive:
         pos_lines = []
         for name, val in top_positive[:5]:
-            contrib_price = int(round(val * scale))   # 转换为价格贡献
-            # 特征友好描述
+            contrib_price = int(round(val * scale))
             if name == '建筑面积':
                 pos_lines.append(f"- **建筑面积**：{input_dict.get('建筑面积',0):.0f} ㎡，贡献约 **+{contrib_price}** 元/平米")
             elif name == '地铁便利性':
@@ -274,11 +254,10 @@ def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict
                 pos_lines.append(f"- **{name}**：贡献约 **+{contrib_price}** 元/平米")
         advice_parts.append("### 📈 主要溢价因素\n" + "\n".join(pos_lines))
 
-    # 负向因素
     if top_negative:
         neg_lines = []
         for name, val in top_negative[:5]:
-            contrib_price = int(round(-val * scale))   # 取正数显示
+            contrib_price = int(round(-val * scale))
             if name == '建筑面积':
                 neg_lines.append(f"- **建筑面积**：{input_dict.get('建筑面积',0):.0f} ㎡，贡献约 **-{contrib_price}** 元/平米")
             elif name == '地铁便利性':
@@ -308,16 +287,13 @@ def generate_advice_from_shap(pred_price, top_positive, top_negative, input_dict
                 neg_lines.append(f"- **{name}**：贡献约 **-{contrib_price}** 元/平米")
         advice_parts.append("### 📉 主要折价因素\n" + "\n".join(neg_lines))
 
-    # 城市洞察
     city_insight = {
         "济南市": "济南作为省会，长期发展潜力较好，地铁沿线或优质学区房源保值能力更强。",
         "烟台市": "烟台为沿海宜居城市，建议关注海景资源、旅游配套及开发区规划。",
         "济宁市": "济宁本地自住需求为主，房价相对平稳，可重点考察学校、医院周边房源。"
     }
-    # 如果city被映射了，但原始city可能不在字典中，我们用映射后的city来取洞察
     advice_parts.append(f"### 🏙️ 城市洞察\n{city_insight.get(city, '根据当地市场情况综合判断。')}")
 
-    # 综合建议
     if pred_price > 20000:
         purchase = "当前价格处于较高水平，建议仔细对比同地段类似房源，重点关注房屋质量及稀缺资源。"
     elif pred_price < 8000:
@@ -408,7 +384,7 @@ col_left, col_right = st.columns([1, 1.2], gap="large")
 
 with col_left:
     st.markdown("<div class='section-title'>🏷️ 房屋基础信息</div>", unsafe_allow_html=True)
-    col_a, col_b = st.columns(2)   # 只保留两列
+    col_a, col_b = st.columns(2)
     with col_a:
         st.number_input("建筑面积 (㎡)", key="area", min_value=30.0, max_value=300.0, step=1.0)
     with col_b:
@@ -483,7 +459,6 @@ with col_right:
 
     if predict_btn:
         try:
-            # 构建基础特征（不含房龄）
             basic_dict = {
                 '建筑面积': st.session_state.area,
                 '朝向': encode_categorical(st.session_state.orientation, encoders['朝向']),
@@ -514,13 +489,13 @@ with col_right:
                 '常住人口': st.session_state.population,
                 '第三产业占比': st.session_state.tertiary,
             }
+            # 注意：此处传入用户选择的城市和年份，但 compute_derived_features 内部会将城市固定为 KNOWN_CITY
             full_dict = compute_derived_features(basic_dict, st.session_state.city, st.session_state.year)
 
             with st.spinner("模型计算中，请稍候..."):
                 pred_price = predict_price(full_dict)
                 fig = plot_shap_waterfall_clean(full_dict)
 
-                # SHAP 贡献（对数尺度）
                 explainer = shap.TreeExplainer(model)
                 input_df = pd.DataFrame([full_dict])[FEATURE_COLS]
                 if '城市' in input_df.columns:
