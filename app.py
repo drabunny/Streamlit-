@@ -83,20 +83,17 @@ st.markdown("""
 # ================== 加载模型与处理对象 ==================
 @st.cache_resource
 def load_artifacts():
-    # 使用训练脚本生成的文件
-    model = joblib.load("best_model.pkl")          # 训练脚本保存的最佳模型
-    feature_cols = joblib.load("feature_columns.pkl")
-    encoders = joblib.load("label_encoders.pkl")
-    y_mean = np.load("y_train_mean.npy").item()
+    # 使用部署文件名
+    model = joblib.load("best_model_final_deploy.pkl")
+    feature_cols = joblib.load("feature_columns_final_deploy.pkl")
+    encoders = joblib.load("label_encoders_final_deploy.pkl")
+    y_mean = np.load("y_train_log_mean.npy").item()  # 注意文件名
     return model, feature_cols, encoders, y_mean
 
 try:
     model, FEATURE_COLS, encoders, y_train_mean = load_artifacts()
-    # 若存在训练脚本中的 RMSE 记录，可读取，否则从模型自身无法获取，此处跳过
-    train_rmse = None  # 可自行读取
-    train_mape_percent = None
 except FileNotFoundError as e:
-    st.error(f"❌ 缺少必要的模型文件：{e}\n请确保 'best_model.pkl', 'feature_columns.pkl', 'label_encoders.pkl', 'y_train_mean.npy' 存在。")
+    st.error(f"❌ 缺少必要的模型文件：{e}\n请确保以下文件存在：\n- best_model_final_deploy.pkl\n- feature_columns_final_deploy.pkl\n- label_encoders_final_deploy.pkl\n- y_train_log_mean.npy")
     st.stop()
 
 # ================== 中文字体 ==================
@@ -297,7 +294,7 @@ with col_right:
 
     if predict_btn:
         try:
-            # 构造原始字典（包含所有微观+宏观特征）
+            # 构造基础字典（包含所有可能用到的特征）
             input_dict = {
                 '建筑面积': st.session_state.area,
                 '房龄': st.session_state.age,
@@ -329,15 +326,28 @@ with col_right:
                 '常住人口': st.session_state.population,
                 '第三产业占比': st.session_state.tertiary,
             }
-            # 注意：这里没有“城市”特征，因为训练脚本未包含。若模型包含城市，会报错。
-            # 若模型特征列表中有“城市”，则需额外添加，但训练脚本中无此列，故不添加。
-            # 若模型特征列表长度与 input_dict 不一致，会引发 KeyError，这里统一过滤
-            # 只保留模型需要的特征
+
+            # ========== 关键修正：处理模型中可能包含的额外类别特征 ==========
+            # 如果 FEATURE_COLS 中有 '城市' 或其它类别特征，但 input_dict 未提供，则从 encoders 中获取第一个类别值
+            # 遍历 FEATURE_COLS，若特征名不在 input_dict 中，且该特征在 encoders 中（说明是类别特征），则用第一个类别填充
+            for col in FEATURE_COLS:
+                if col not in input_dict:
+                    # 如果该列在 encoders 中，说明是类别特征
+                    if col in encoders:
+                        # 获取该编码器的第一个类别（或'其他'）
+                        first_class = encoders[col].classes_[0]
+                        input_dict[col] = first_class
+                        st.info(f"ℹ️ 模型需要特征 '{col}'，系统自动填入默认值：'{first_class}'")
+                    else:
+                        # 对于数值特征，若缺失则补0（但通常不会发生）
+                        input_dict[col] = 0
+                        st.warning(f"⚠️ 数值特征 '{col}' 缺失，自动补0，可能影响预测准确性。")
+
+            # 只保留模型需要的特征，并确保顺序
             filtered_dict = {k: input_dict[k] for k in FEATURE_COLS if k in input_dict}
-            # 检查是否有缺失特征
             missing = set(FEATURE_COLS) - set(filtered_dict.keys())
             if missing:
-                st.error(f"模型需要以下特征但未提供：{missing}")
+                st.error(f"模型需要以下特征但未能提供：{missing}")
                 st.stop()
 
             with st.spinner("模型计算中，请稍候..."):
@@ -346,13 +356,13 @@ with col_right:
 
             st.session_state['pred'] = pred
             st.session_state['fig'] = fig
-            st.session_state['filtered_dict'] = filtered_dict  # 保存用于显示
+            st.session_state['filtered_dict'] = filtered_dict
 
         except Exception as e:
             st.error(f"预测失败: {str(e)}")
-            # 显示调试信息：特征列数
-            st.write(f"模型特征数量: {len(FEATURE_COLS)}")
-            st.write(f"模型特征列表: {FEATURE_COLS}")
+            # 调试信息：显示特征列表
+            st.write("🔍 模型特征列表 (共 {} 个):".format(len(FEATURE_COLS)))
+            st.write(FEATURE_COLS)
 
     if 'pred' in st.session_state:
         pred = st.session_state.pred
@@ -364,9 +374,7 @@ with col_right:
         ''', unsafe_allow_html=True)
 
         if y_train_mean:
-            st.caption(f"📊 训练集基准均价：{y_train_mean:.0f} 元/平米")
-        # 如有RMSE可显示
-        # st.caption(f"⚙️ 模型误差 RMSE：{train_rmse:.0f} ｜ 相对误差：{train_mape_percent:.1f}%")
+            st.caption(f"📊 训练集目标变量均值（对数）：{y_train_mean:.4f}")
 
         st.markdown("<div class='section-title'>🔍 房价影响因素深度分析</div>", unsafe_allow_html=True)
         st.pyplot(st.session_state.fig, use_container_width=True)
